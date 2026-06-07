@@ -30,6 +30,9 @@ async function runShowQuery(artists: { id: string; name: string }[], location: U
   }
   try {
     const [bitShows, tmShows] = await Promise.all([getBITEvents(artists, location, hubs), getTMEvents(artists, location, hubs)])
+    if (bitShows.length === 0 && tmShows.length === 0) {
+      console.log(`[shows] 0 events for ${artists.length} artists near ${location.city} (hubs: ${enabledHubIds.join(',') || 'none'})`)
+    }
     const { shows, duplicatesRemoved } = deduplicateShows([...bitShows, ...tmShows])
     if (shows.length > 0) setCachedShows(cacheKey, shows, artists.map(a => a.name), location.city)
     return NextResponse.json({ shows, totalFound: bitShows.length + tmShows.length, deduplicatedCount: duplicatesRemoved, locationFilter: { homeLocation: location, enabledHubs: hubs, radiusMiles: 80 }, fromCache: false })
@@ -55,6 +58,7 @@ export async function GET(req: Request): Promise<NextResponse<ShowsResponse | { 
   let region = (searchParams.get('region') ?? '').trim()
   const country = (searchParams.get('country') ?? 'US').trim()
   const hubsParam = (searchParams.get('hubs') ?? '').trim()
+  const artistsParam = (searchParams.get('artists') ?? '').trim()
   if (!isFinite(lat) || !isFinite(lng)) {
     return NextResponse.json({ error: 'lat and lng are required' }, { status: 400 })
   }
@@ -69,13 +73,15 @@ export async function GET(req: Request): Promise<NextResponse<ShowsResponse | { 
     }
   }
   if (!city) city = 'Unknown'
+  // Prefer the artists passed in the URL (kept client-side from /api/artists).
+  // Fall back to manually-saved artists + session.savedArtists if no list is given.
   let artists: { id: string; name: string }[] = []
-  if (session.userId) {
+  if (artistsParam) {
+    artists = artistsParam.split(',').map(n => n.trim()).filter(Boolean).map(n => ({ id: 'url', name: n }))
+  } else if (session.userId) {
     const user = getUserById(session.userId)
     const saved = getSavedArtists(session.userId)
-    if (user) {
-      artists = saved.map(a => ({ id: user.id, name: a.name }))
-    }
+    if (user) artists = saved.map(a => ({ id: user.id, name: a.name }))
   } else if (session.savedArtists) {
     artists = session.savedArtists.map(a => ({ id: 'session', name: a.name }))
   }

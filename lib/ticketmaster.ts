@@ -58,7 +58,7 @@ async function getArtistEvents(artistName: string, artistId: string, location: U
     for (const point of points) {
       const params = new URLSearchParams({ apikey: API_KEY, attractionId, latlong: `${point.lat},${point.lng}`, radius: '60', unit: 'miles', size: '20', sort: 'date,asc', classificationName: 'music' })
       const res = await fetch(`${TM_API}/events.json?${params}`, { cache: 'no-store' })
-      if (!res.ok) continue
+      if (!res.ok) { console.warn(`[ticketmaster] ${artistName}: ${res.status}`); continue }
       const data = await res.json()
       for (const e of (data._embedded?.events ?? [])) {
         if (seenIds.has(e.id)) continue; seenIds.add(e.id)
@@ -72,5 +72,5 @@ async function getArtistEvents(artistName: string, artistId: string, location: U
       }
     }
     return allShows
-  } catch { return [] }
+  } catch (e) { console.warn(`[ticketmaster] ${artistName}:`, e); return [] }
 }

@@ -24,7 +24,7 @@ function saveHidden(s: Set<string>) {
 export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
-  const [period, setPeriod] = useState<string>('overall')
+  const [period, setPeriod] = useState<string>('6month')
   const [location, setLocation] = useState<UserLocation | null>(null)
   const [hubs, setHubs] = useState<TouringHub[]>([])
   const [savedNames, setSavedNames] = useState<Set<string>>(new Set())
@@ -95,6 +95,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   function goToShows() {
     if (!location) return
     const params = new URLSearchParams({ lat: String(location.latitude), lng: String(location.longitude), city: location.city, region: location.region, country: location.country, hubs: hubs.map(h => h.id).join(',') })
+    if (artists.length) params.set('artists', artists.map(a => a.name).join(','))
     const url = `/shows?${params}`
     localStorage.setItem('lastShowsUrl', url)
     window.location.href = url

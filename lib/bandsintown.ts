@@ -28,8 +28,15 @@ export async function getBatchArtistEvents(artists: { name: string; id: string }
 }
 async function getArtistEvents(artistName: string, artistId: string, location: UserLocation, hubs: TouringHub[]): Promise<Show[]> {
   try {
+    if (!APP_ID || APP_ID === 'your_bandsintown_app_id') {
+      console.warn('[bandsintown] BANDSINTOWN_APP_ID not configured — skipping')
+      return []
+    }
     const res = await fetch(`${BANDSINTOWN_API}/artists/${encodeURIComponent(artistName)}/events?app_id=${APP_ID}&date=upcoming`, { cache: 'no-store' })
-    if (!res.ok) return []
+    if (!res.ok) {
+      console.warn(`[bandsintown] ${artistName}: ${res.status}`)
+      return []
+    }
     const events = await res.json()
     if (!Array.isArray(events)||events.length===0) return []
     return events.filter((e: any) => {
@@ -40,5 +47,5 @@ async function getArtistEvents(artistName: string, artistId: string, location: U
       const title = e.title ?? e.lineup?.join(', ') ?? artistName
       return { id: `bit_${e.id}`, sourceIds: { bandsintown: e.id }, source: 'bandsintown' as const, artistName, venue: { id: e.venue.id, name: e.venue.name, city: e.venue.city, region: e.venue.region, country: e.venue.country, latitude: parseFloat(e.venue.latitude), longitude: parseFloat(e.venue.longitude), address: e.venue.address }, date, startTime: time?.slice(0,5)||undefined, ticketUrl: e.offers?.[0]?.url, bandsintownUrl: e.url, status: e.offers?.[0]?.status==='available'?'onsale':'unknown' as any, isFestival: (e.lineup?.length??0)>3, isTribute: detectTribute(title, artistName) }
     })
-  } catch { return [] }
+  } catch (e) { console.warn(`[bandsintown] ${artistName}:`, e); return [] }
 }

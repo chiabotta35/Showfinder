@@ -36,6 +36,7 @@ function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: 
 export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
   const [location, setLocation] = useState<UserLocation>(initialLocation)
   const [hubs, setHubs] = useState<TouringHub[]>(initialHubs)
+  const [artistNames, setArtistNames] = useState<string[]>(initialArtistNames)
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,7 +63,6 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
       } catch {}
     }
     loadShows()
-    loadShows()
   }, [])
 
   async function loadShows() {
@@ -70,7 +70,10 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     const url = new URL('/api/shows', window.location.origin)
     url.searchParams.set('lat', String(location.latitude))
     url.searchParams.set('lng', String(location.longitude))
+    url.searchParams.set('city', location.city)
+    if (location.region) url.searchParams.set('region', location.region)
     if (hubs.length) url.searchParams.set('hubs', hubs.map(h => h.id).join(','))
+    if (artistNames.length) url.searchParams.set('artists', artistNames.join(','))
     const res = await fetch(url.toString())
     const data = await res.json()
     setShows(data.shows ?? [])

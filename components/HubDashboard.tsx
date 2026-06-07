@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import NavDock from './NavDock'
 import LocationBar from './LocationBar'
-import type { UserLocation, TouringHub } from '@/types'
+import type { UserLocation, TouringHub, ScoredArtist } from '@/types'
 import { TOURING_HUBS, haversineDistanceMiles, getNearestHubs } from '@/lib/location'
 
 interface Props {
@@ -17,6 +17,7 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
   const router = useRouter()
   const [location, setLocation] = useState<UserLocation | null>(null)
   const [hubs, setHubs] = useState<TouringHub[]>([])
+  const [artists, setArtists] = useState<ScoredArtist[]>([])
 
   useEffect(() => {
     if (savedLocation) {
@@ -26,8 +27,14 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
     }
   }, [])
 
+  useEffect(() => {
+    if (!isLoggedIn) return
+    fetch('/api/artists?period=6month').then(r => r.json()).then(d => setArtists(d.artists ?? [])).catch(() => {})
+  }, [isLoggedIn])
+
   function goToShows(loc: UserLocation, h: TouringHub[]) {
     const params = new URLSearchParams({ lat: String(loc.latitude), lng: String(loc.longitude), city: loc.city, region: loc.region, country: loc.country, hubs: h.map(x => x.id).join(',') })
+    if (artists.length) params.set('artists', artists.map(a => a.name).join(','))
     router.push(`/shows?${params.toString()}`)
   }
 
