@@ -27,13 +27,14 @@ async function getAttractionId(artistName: string): Promise<string|null> {
   try {
     const params = new URLSearchParams({ apikey: API_KEY, keyword: artistName, classificationName: 'music', size: '5' })
     const res = await fetch(`${TM_API}/attractions.json?${params}`, { cache: 'no-store' })
-    if (!res.ok) { attractionCache.set(key,null); return null }
+    if (!res.ok) { console.warn(`[ticketmaster] attractions lookup ${res.status} for "${artistName}"`); return null }
     const data = await res.json()
     const attractions = data._embedded?.attractions ?? []
     const best = findBestMatch(artistName, attractions)
-    attractionCache.set(key, best?.id ?? null)
+    // Only cache positive hits — don't negative-cache misses so we can retry on a transient failure.
+    if (best?.id) attractionCache.set(key, best.id)
     return best?.id ?? null
-  } catch { attractionCache.set(key,null); return null }
+  } catch (e) { console.warn(`[ticketmaster] attractions lookup failed for "${artistName}":`, e); return null }
 }
 
 function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -81,7 +82,9 @@ async function getArtistEvents(artistName: string, artistId: string, location: U
         if (!res.ok) { console.warn(`[ticketmaster] ${artistName}: ${res.status}`); continue }
         const data = await res.json()
         events = data._embedded?.events ?? []
-        eventCache.set(cacheKey, { ts: Date.now(), events })
+        // Only cache non-empty results — if TM returned 0 for a given attraction+point,
+        // let the next batch try again instead of locking in the empty result.
+        if (events.length > 0) eventCache.set(cacheKey, { ts: Date.now(), events })
       }
       for (const e of events) {
         if (seenIds.has(e.id)) continue; seenIds.add(e.id)

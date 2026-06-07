@@ -92,10 +92,23 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
     setHidden(next); saveHidden(next)
   }
 
-  function goToShows() {
+  async function goToShows() {
     if (!location) return
-    if (artists.length) {
-      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
+    // Make sure we have the artist list to search with — fetch fresh if the
+    // state is still empty (e.g. user clicked before the initial load finished).
+    let artistList = artists
+    if (artistList.length === 0) {
+      try {
+        const r = await fetch('/api/artists?period=6month')
+        if (r.ok) {
+          const d = await r.json()
+          artistList = d.artists ?? []
+          setArtists(artistList)
+        }
+      } catch {}
+    }
+    if (artistList.length) {
+      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artistList.map(a => a.name))) } catch {}
     }
     try {
       localStorage.setItem('lastShowsLocation', JSON.stringify({

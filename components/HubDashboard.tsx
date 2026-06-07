@@ -31,9 +31,22 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
     fetch('/api/artists?period=6month').then(r => r.json()).then(d => setArtists(d.artists ?? [])).catch(() => {})
   }, [isLoggedIn])
 
-  function goToShows(loc: UserLocation, h: TouringHub[]) {
-    if (artists.length) {
-      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
+  async function goToShows(loc: UserLocation, h: TouringHub[]) {
+    // Make sure we have artists loaded before navigating; otherwise the shows
+    // page would only see manually-saved artists and miss the Last.fm ones.
+    let artistList = artists
+    if (artistList.length === 0 && isLoggedIn) {
+      try {
+        const r = await fetch('/api/artists?period=6month')
+        if (r.ok) {
+          const d = await r.json()
+          artistList = d.artists ?? []
+          setArtists(artistList)
+        }
+      } catch {}
+    }
+    if (artistList.length) {
+      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artistList.map(a => a.name))) } catch {}
     }
     try {
       localStorage.setItem('lastShowsLocation', JSON.stringify({
@@ -91,7 +104,22 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
             onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }}
           />
           {location && (
-            <button onClick={() => goToShows(location, hubs)} className="btn-primary" style={{ marginTop: 16, padding: '12px 24px', fontSize: 14, width: '100%' }}>
+            <button
+              onClick={() => {
+                // If LocationBar's onLocationChange hasn't populated hubs yet (saved-location flow),
+                // fetch the nearest hubs from the location API and pass them through.
+                if (hubs.length === 0) {
+                  fetch('/api/location?lat=' + location.latitude + '&lng=' + location.longitude)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(d => { if (d && Array.isArray(d.suggestedHubs)) { setHubs(d.suggestedHubs); goToShows(location, d.suggestedHubs) } else { goToShows(location, []) } })
+                    .catch(() => goToShows(location, []))
+                } else {
+                  goToShows(location, hubs)
+                }
+              }}
+              className="btn-primary"
+              style={{ marginTop: 16, padding: '12px 24px', fontSize: 14, width: '100%' }}
+            >
               Find shows near {location.city} →
             </button>
           )}

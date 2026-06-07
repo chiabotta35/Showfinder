@@ -35,7 +35,10 @@ function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: 
 
 export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
   const [location, setLocation] = useState<UserLocation>(initialLocation)
-  const [hubs, setHubs] = useState<TouringHub[]>(initialHubs)
+  // All hubs we know about (from server + location API). Used for the toggle UI.
+  const [allHubs, setAllHubs] = useState<TouringHub[]>(initialHubs)
+  // Which of those hubs the user has enabled for this search.
+  const [enabledHubs, setEnabledHubs] = useState<Set<string>>(() => new Set(initialHubs.map(h => h.id)))
   const [artistNames, setArtistNames] = useState<string[]>(() => {
     if (initialArtistNames.length) return initialArtistNames
     if (typeof window === 'undefined') return []
@@ -57,28 +60,28 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   // On mount, hydrate from localStorage if no URL params were given.
   useEffect(() => {
     if (typeof window === 'undefined') return
+    let mounted = true
+    let savedLoc: any = null
+    let savedHubIds: string[] = []
     try {
       const stored = localStorage.getItem('lastShowsLocation')
       if (stored) {
-        const loc = JSON.parse(stored)
-        if (loc && isFinite(loc.latitude) && isFinite(loc.longitude) && (loc.latitude !== 0 || loc.longitude !== 0)) {
-          setLocation({ city: loc.city, region: loc.region, country: loc.country || 'US', latitude: loc.latitude, longitude: loc.longitude })
-          if (Array.isArray(loc.hubs) && loc.hubs.length) {
-            const knownHubs = (window as any).__touringHubs ?? null
-            // We'll fetch the hub list once and merge ids → objects.
-            fetch('/api/location?lat=' + loc.latitude + '&lng=' + loc.longitude)
-              .then(r => r.json())
-              .then(d => { if (Array.isArray(d.suggestedHubs)) setHubs(d.suggestedHubs) })
-              .catch(() => {})
-          }
+        savedLoc = JSON.parse(stored)
+        if (savedLoc && isFinite(savedLoc.latitude) && isFinite(savedLoc.longitude) && (savedLoc.latitude !== 0 || savedLoc.longitude !== 0)) {
+          setLocation({ city: savedLoc.city, region: savedLoc.region, country: savedLoc.country || 'US', latitude: savedLoc.latitude, longitude: savedLoc.longitude })
+          if (Array.isArray(savedLoc.hubs)) savedHubIds = savedLoc.hubs
         }
       }
     } catch {}
+    const lat = savedLoc?.latitude ?? initialLocation.latitude
+    const lng = savedLoc?.longitude ?? initialLocation.longitude
+
+    // Check the client cache synchronously before doing any network work.
     try {
       const raw = localStorage.getItem(CACHE_KEY)
-      if (raw) {
+      if (raw && savedLoc) {
         const { ts, data, locKey } = JSON.parse(raw)
-        const cur = `${location.latitude},${location.longitude}`
+        const cur = `${savedLoc.latitude},${savedLoc.longitude}|${savedHubIds.slice().sort().join(',')}|${artistNames.slice().sort().join(',')}`
         if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
           setShows(data.shows ?? [])
           setArtists(data.artists ?? [])
@@ -87,35 +90,96 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
         }
       }
     } catch {}
-    loadShows()
+
+    // Fetch the suggested hubs and then load shows with the full hub list.
+    // This way the first request always includes the recommended tour hubs
+    // even if the user hasn't manually picked any yet.
+    fetch('/api/location?lat=' + lat + '&lng=' + lng)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!mounted || !d) {
+          loadShows(savedLoc, savedHubIds)
+          return
+        }
+        const suggested: TouringHub[] = Array.isArray(d.suggestedHubs) ? d.suggestedHubs : []
+        if (suggested.length) {
+          setAllHubs(suggested)
+          const initialEnabled = savedHubIds.length
+            ? new Set(savedHubIds.filter(id => suggested.some(h => h.id === id)))
+            : new Set(suggested.map(h => h.id))
+          setEnabledHubs(initialEnabled)
+          // Use whatever the user previously saved (intersected with the fresh list);
+          // fall back to all suggested hubs if nothing valid remains.
+          const hubIdsToUse = initialEnabled.size > 0 ? Array.from(initialEnabled) : suggested.map(h => h.id)
+          loadShows(savedLoc, hubIdsToUse)
+        } else {
+          loadShows(savedLoc, savedHubIds)
+        }
+      })
+      .catch(() => {
+        if (mounted) loadShows(savedLoc, savedHubIds)
+      })
+    return () => { mounted = false }
   }, [])
 
-  async function loadShows() {
+  async function loadShows(savedLocOverride?: any, savedHubIdsOverride?: string[]) {
+    let hubIdsToSend: string[]
+    if (savedHubIdsOverride && savedHubIdsOverride.length) {
+      // First load: caller provides the exact hub list to use.
+      hubIdsToSend = savedHubIdsOverride
+    } else {
+      // Subsequent loads: use the user's enabled hubs filtered by valid hub IDs.
+      const validHubIds = new Set(allHubs.map(h => h.id))
+      hubIdsToSend = Array.from(enabledHubs).filter(id => validHubIds.has(id))
+    }
+    return loadShowsWithHubs(new Set(hubIdsToSend), savedLocOverride)
+  }
+
+  async function loadShowsWithHubs(hubIds: Set<string>, savedLocOverride?: any) {
     setLoading(true)
+    const locForUrl = savedLocOverride && isFinite(savedLocOverride.latitude) ? {
+      city: savedLocOverride.city, region: savedLocOverride.region, country: savedLocOverride.country || 'US',
+      latitude: savedLocOverride.latitude, longitude: savedLocOverride.longitude,
+    } : location
+    const hubIdsToSend = Array.from(hubIds)
     const url = new URL('/api/shows', window.location.origin)
-    url.searchParams.set('lat', String(location.latitude))
-    url.searchParams.set('lng', String(location.longitude))
-    url.searchParams.set('city', location.city)
-    if (location.region) url.searchParams.set('region', location.region)
-    if (hubs.length) url.searchParams.set('hubs', hubs.map(h => h.id).join(','))
+    url.searchParams.set('lat', String(locForUrl.latitude))
+    url.searchParams.set('lng', String(locForUrl.longitude))
+    url.searchParams.set('city', locForUrl.city)
+    if (locForUrl.region) url.searchParams.set('region', locForUrl.region)
+    if (hubIdsToSend.length) url.searchParams.set('hubs', hubIdsToSend.join(','))
     if (artistNames.length) url.searchParams.set('artists', artistNames.join(','))
     const res = await fetch(url.toString())
     const data = await res.json()
     setShows(data.shows ?? [])
     setArtists(data.artists ?? [])
     setLoading(false)
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${location.latitude},${location.longitude}` })) } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${locForUrl.latitude},${locForUrl.longitude}|${hubIdsToSend.sort().join(',')}|${artistNames.slice().sort().join(',')}` })) } catch {}
   }
 
   function refresh() {
     try { localStorage.removeItem(CACHE_KEY) } catch {}
-    loadShows()
+    const validHubIds = new Set(allHubs.map(h => h.id))
+    const next = new Set(Array.from(enabledHubs).filter(id => validHubIds.has(id)))
+    loadShowsWithHubs(next)
+  }
+
+  function toggleHub(id: string) {
+    const next = new Set(enabledHubs)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setEnabledHubs(next)
+    try { localStorage.removeItem(CACHE_KEY) } catch {}
+    setTimeout(() => loadShowsWithHubs(next), 0)
   }
 
   function onLocationChange(loc: UserLocation, h: TouringHub[]) {
-    setLocation(loc); setHubs(h); setPage(1)
+    setLocation(loc); setAllHubs(h); setPage(1)
+    // Enable all suggested hubs by default for the new location.
+    const next = new Set(h.map(x => x.id))
+    setEnabledHubs(next)
     try { localStorage.removeItem(CACHE_KEY) } catch {}
-    setTimeout(loadShows, 0)
+    setTimeout(() => loadShowsWithHubs(next), 0)
   }
 
   // Map artist name -> relevance score (lower index = more relevant)
@@ -222,7 +286,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
           <div>
             <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Shows</h1>
             <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>
-              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{hubs.length > 1 ? ` +${hubs.length - 1}` : ''}
+              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}
             </p>
           </div>
           <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
@@ -248,6 +312,44 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
               ))}
             </div>
           </div>
+
+          {allHubs.length > 0 && (
+            <>
+              <div className="divider" />
+              <div>
+                <div className="section-label" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>Tour hubs</span>
+                  <button
+                    onClick={() => {
+                      const next = enabledHubs.size === allHubs.length
+                        ? new Set<string>()
+                        : new Set(allHubs.map(h => h.id))
+                      setEnabledHubs(next)
+                      try { localStorage.removeItem(CACHE_KEY) } catch {}
+                      setTimeout(() => loadShowsWithHubs(next), 0)
+                    }}
+                    className="btn-ghost"
+                    style={{ padding: '2px 8px', fontSize: 10, fontFamily: 'Syne, sans-serif' }}
+                  >
+                    {enabledHubs.size === allHubs.length ? 'None' : 'All'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {allHubs.map(h => (
+                    <button
+                      key={h.id}
+                      onClick={() => toggleHub(h.id)}
+                      className={enabledHubs.has(h.id) ? 'chip active' : 'chip'}
+                      title={`${h.name} · ${h.region}`}
+                      style={{ opacity: enabledHubs.has(h.id) ? 1 : 0.45 }}
+                    >
+                      {h.name.replace(/, [A-Z]{2}$/, '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {cities.length > 1 && (
             <>

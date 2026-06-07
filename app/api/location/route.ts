@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     const res = await fetch(`${NOMINATIM}/reverse?lat=${lat}&lon=${lng}&format=json&zoom=10&addressdetails=1`,{headers:HEADERS,cache:'no-store'})
     const data = await res.json(); const addr = data.address??{}
     const city = addr.city||addr.town||addr.village||addr.municipality||addr.county||'Unknown'
-    return NextResponse.json({city,region:addr.state??'',country:addr.country_code?.toUpperCase()??'US',latitude:lat,longitude:lng,suggestedHubs:getNearestHubs(lat,lng,5)})
+    return NextResponse.json({city,region:addr.state??'',country:addr.country_code?.toUpperCase()??'US',latitude:lat,longitude:lng,suggestedHubs:getNearestHubs(lat,lng,10)})
   } catch(e){return NextResponse.json({error:'Geocoding failed'},{status:500})}
 }
 export async function POST(req: Request) {
