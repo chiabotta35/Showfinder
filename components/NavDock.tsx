@@ -3,16 +3,16 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 const NAV = [
-  { href: '/dashboard', label: 'Home', icon: 'home' },
-  { href: '/artists', label: 'Artists', icon: 'music' },
-  { href: '/shows', label: 'Shows', icon: 'ticket', dynamic: true },
-  { href: '/discover', label: 'Discover', icon: 'compass' },
-  { href: '/account', label: 'Account', icon: 'user' },
+  { href: '/dashboard', label: 'Home', icon: 'home', color: 'var(--home-primary)' },
+  { href: '/artists', label: 'Artists', icon: 'music', color: 'var(--artists-primary)' },
+  { href: '/shows', label: 'Shows', icon: 'ticket', color: 'var(--shows-primary)', dynamic: true },
+  { href: '/discover', label: 'Discover', icon: 'compass', color: 'var(--discover-primary)' },
+  { href: '/account', label: 'Account', icon: 'user', color: 'var(--account-primary)' },
 ]
 
-function NavIcon({ name, active }: { name: string; active: boolean }) {
-  const stroke = active ? '#000' : 'currentColor'
-  const sw = 1.8
+function NavIcon({ name, color, active }: { name: string; color: string; active: boolean }) {
+  const stroke = active ? color : 'currentColor'
+  const sw = active ? 2 : 1.6
   switch (name) {
     case 'home':
       return <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"><path d="M3 10.5 12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7h-6v7H4a1 1 0 0 1-1-1z"/></svg>
@@ -30,26 +30,28 @@ function NavIcon({ name, active }: { name: string; active: boolean }) {
 
 export default function NavDock() {
   const pathname = usePathname()
-  const [showsUrl, setShowsUrl] = useState('/artists')
+  const [showsUrl, setShowsUrl] = useState('/shows')
   useEffect(() => { const s = localStorage.getItem('lastShowsUrl'); if (s) setShowsUrl(s) }, [])
 
   return (
     <nav
-      className="glass"
       style={{
         position: 'fixed',
-        bottom: 16,
+        bottom: 12,
         left: '50%',
         transform: 'translateX(-50%)',
         borderRadius: 'var(--r-xl)',
-        padding: '6px',
+        padding: '6px 8px',
         display: 'flex',
         gap: 2,
         zIndex: 1000,
-        boxShadow: 'var(--shadow-lg)',
-        width: 'calc(100% - 32px)',
-        maxWidth: 420,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--border)',
+        width: 'calc(100% - 24px)',
+        maxWidth: 400,
         justifyContent: 'space-around',
+        background: 'var(--surface-1)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
       }}
     >
       {NAV.map(item => {
@@ -64,26 +66,39 @@ export default function NavDock() {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 2,
-              padding: '8px 10px',
+              gap: 3,
+              padding: '7px 8px 5px',
               borderRadius: 'var(--r-md)',
               textDecoration: 'none',
-              color: active ? '#000' : 'var(--text-muted)',
-              background: active ? 'var(--accent)' : 'transparent',
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+              color: active ? item.color : 'var(--text-muted)',
+              background: active ? `color-mix(in srgb, ${item.color} 12%, transparent)` : 'transparent',
+              transition: 'all 0.2s var(--ease-out)',
               flex: 1,
               minWidth: 0,
+              position: 'relative',
             }}
           >
-            <NavIcon name={item.icon} active={active} />
+            <NavIcon name={item.icon} color={item.color} active={active} />
             <span style={{
               fontFamily: 'Outfit, sans-serif',
               fontSize: 9,
-              fontWeight: 600,
-              letterSpacing: 0.4,
+              fontWeight: active ? 700 : 500,
+              letterSpacing: 0.3,
               textTransform: 'uppercase',
               whiteSpace: 'nowrap',
             }}>{item.label}</span>
+            {active && (
+              <span style={{
+                position: 'absolute',
+                top: -1,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                width: 16,
+                height: 2,
+                borderRadius: 1,
+                background: item.color,
+              }} />
+            )}
           </a>
         )
       })}
