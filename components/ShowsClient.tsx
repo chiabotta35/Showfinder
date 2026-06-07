@@ -106,16 +106,18 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
           loadShows(savedLoc, savedHubIds)
           return
         }
+        // "nearHubs" are the close ones (~350mi) — default-enabled.
+        // "suggestedHubs" includes more distant ones (~600mi) — shown in UI but not enabled.
         const suggested: TouringHub[] = Array.isArray(d.suggestedHubs) ? d.suggestedHubs : []
+        const near: TouringHub[] = Array.isArray(d.nearHubs) ? d.nearHubs : []
         if (suggested.length) {
           setAllHubs(suggested)
+          const suggestedIds = new Set(suggested.map(h => h.id))
           const initialEnabled = savedHubIds.length
-            ? new Set(savedHubIds.filter(id => suggested.some(h => h.id === id)))
-            : new Set(suggested.map(h => h.id))
+            ? new Set(savedHubIds.filter(id => suggestedIds.has(id)))
+            : new Set(near.map(h => h.id))  // default = close hubs only
           setEnabledHubs(initialEnabled)
-          // Use whatever the user previously saved (intersected with the fresh list);
-          // fall back to all suggested hubs if nothing valid remains.
-          const hubIdsToUse = initialEnabled.size > 0 ? Array.from(initialEnabled) : suggested.map(h => h.id)
+          const hubIdsToUse = initialEnabled.size > 0 ? Array.from(initialEnabled) : near.map(h => h.id)
           loadShows(savedLoc, hubIdsToUse)
         } else {
           loadShows(savedLoc, savedHubIds)
@@ -348,10 +350,13 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
                       key={h.id}
                       onClick={() => toggleHub(h.id)}
                       className={enabledHubs.has(h.id) ? 'chip active' : 'chip'}
-                      title={`${h.name} · ${h.region}`}
+                      title={`${h.name} · ${h.region}${h.distanceMiles != null ? ` · ${h.distanceMiles} mi` : ''}`}
                       style={{ opacity: enabledHubs.has(h.id) ? 1 : 0.45 }}
                     >
                       {h.name.replace(/, [A-Z]{2}$/, '')}
+                      {h.distanceMiles != null && (
+                        <span style={{ marginLeft: 5, opacity: 0.7, fontSize: 9, fontFamily: 'Outfit, sans-serif' }}>{h.distanceMiles}mi</span>
+                      )}
                     </button>
                   ))}
                 </div>

@@ -31,7 +31,13 @@ function migrate(db: Database.Database) {
       cache_key TEXT PRIMARY KEY, shows_json TEXT NOT NULL,
       artist_list TEXT NOT NULL, location TEXT NOT NULL, created_at INTEGER NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS hub_show_cache (
+      cache_key TEXT PRIMARY KEY, shows_json TEXT NOT NULL,
+      artist_name TEXT NOT NULL, hub_id TEXT NOT NULL, created_at INTEGER NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_show_cache_created ON show_cache(created_at);
+    CREATE INDEX IF NOT EXISTS idx_hub_show_cache_created ON hub_show_cache(created_at);
+    CREATE INDEX IF NOT EXISTS idx_hub_show_cache_artist ON hub_show_cache(artist_name);
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   `)
   const cols = (db.prepare("PRAGMA table_info(users)").all() as any[]).map(r => r.name)
@@ -129,4 +135,47 @@ export function addSavedArtist(userId: string, name: string, mbid?: string) {
 }
 export function removeSavedArtist(userId: string, name: string) {
   getDb().prepare('DELETE FROM user_artists WHERE user_id = ? AND name = ?').run(userId, name)
+}
+
+// ---- Per-hub show cache ----
+// Cached Ticketmaster event results keyed by (artist, hubId). Survives server restarts
+// and is shared across requests, so toggling a hub on/off doesn't re-query TM for hubs
+// we've already pulled within the TTL window.
+const HUB_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+
+export function buildHubCacheKey(artistName: string, hubId: string): string {
+  return crypto.createHash('sha256').update(`${artistName.toLowerCase()}|${hubId}`).digest('hex').slice(0, 32)
+}
+
+export function getHubShows(cacheKey: string): any[] | null {
+  try {
+    const row = getDb().prepare('SELECT shows_json FROM hub_show_cache WHERE cache_key = ? AND created_at > ?')
+      .get(cacheKey, Date.now() - HUB_CACHE_TTL_MS) as any
+    return row ? JSON.parse(row.shows_json) : null
+  } catch { return null }
+}
+
+export function setHubShows(cacheKey: string, shows: any[], artistName: string, hubId: string): void {
+  try {
+    const db = getDb()
+    // Only persist non-empty results so transient failures can be retried on the next request.
+    if (!shows || shows.length === 0) return
+    db.prepare(`INSERT INTO hub_show_cache (cache_key, shows_json, artist_name, hub_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(cache_key) DO UPDATE SET shows_json = excluded.shows_json, created_at = excluded.created_at`)
+      .run(cacheKey, JSON.stringify(shows), artistName, hubId, Date.now())
+    // Cap the table to keep it bounded.
+    db.prepare(`DELETE FROM hub_show_cache WHERE cache_key NOT IN (SELECT cache_key FROM hub_show_cache ORDER BY created_at DESC LIMIT 2000)`).run()
+  } catch (err) { console.error('[db] hub cache write failed:', err) }
+}
+
+export function clearHubCache(artistName?: string) {
+  try {
+    const db = getDb()
+    if (artistName) {
+      db.prepare('DELETE FROM hub_show_cache WHERE artist_name = ?').run(artistName)
+    } else {
+      db.prepare('DELETE FROM hub_show_cache').run()
+    }
+  } catch (err) { console.error('[db] hub cache clear failed:', err) }
 }

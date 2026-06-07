@@ -33,7 +33,7 @@ export interface Show {
   presales?: { name: string; startDateTime: string; endDateTime?: string }[]
 }
 export interface UserLocation { city: string; region: string; country: string; latitude: number; longitude: number }
-export interface TouringHub { id: string; name: string; latitude: number; longitude: number; region: string }
+export interface TouringHub { id: string; name: string; latitude: number; longitude: number; region: string; distanceMiles?: number }
 export interface LocationFilter { homeLocation: UserLocation; enabledHubs: TouringHub[]; radiusMiles?: number }
 export interface ArtistsResponse { artists: ScoredArtist[]; totalTracked: number; lastfmConnected: boolean; period?: LastfmPeriod }
 export interface ShowsResponse { shows: Show[]; totalFound: number; deduplicatedCount: number; locationFilter: LocationFilter; fromCache?: boolean }
