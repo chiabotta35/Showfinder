@@ -294,12 +294,14 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
           <div>
             <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Shows</h1>
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span>{total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}</span>
-              {dataSource && lastFetchAt && <DataSourceBadge source={dataSource} ts={lastFetchAt} />}
+            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>
+              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}
             </p>
           </div>
-          <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {dataSource && lastFetchAt && <StatusDot source={dataSource} ts={lastFetchAt} />}
+            <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
@@ -611,7 +613,7 @@ function CopyLinkButton({ link }: { link: string }) {
   )
 }
 
-function DataSourceBadge({ source, ts }: { source: 'cache' | 'api' | 'client'; ts: number }) {
+function StatusDot({ source, ts }: { source: 'cache' | 'api' | 'client'; ts: number }) {
   const [, force] = useState(0)
   useEffect(() => {
     const id = setInterval(() => force(x => x + 1), 30_000)
@@ -619,26 +621,21 @@ function DataSourceBadge({ source, ts }: { source: 'cache' | 'api' | 'client'; t
   }, [])
   const ageMin = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
   const ageStr = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin / 60)}h ago`
-  if (source === 'api') {
-    return (
-      <span title={`Live API result from ${new Date(ts).toLocaleTimeString()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', background: 'var(--accent-soft)', color: 'var(--accent)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
-        Live · {ageStr}
-      </span>
-    )
-  }
-  if (source === 'cache') {
-    return (
-      <span title={`Served from server cache (${new Date(ts).toLocaleTimeString()})`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', border: '1px solid var(--border)', color: 'var(--text-dim)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-dim)' }} />
-        Server cache · {ageStr}
-      </span>
-    )
-  }
+  const color = source === 'api' ? 'var(--accent)' : source === 'cache' ? '#f59e0b' : 'var(--text-dim)'
+  const label = source === 'api' ? 'Live' : source === 'cache' ? 'Server cache' : 'Local cache'
+  const tooltip = `${label} · ${ageStr} · ${new Date(ts).toLocaleTimeString()}`
+  const live = source === 'api'
   return (
-    <span title={`Served from local browser cache (${new Date(ts).toLocaleTimeString()})`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', border: '1px solid var(--border)', color: 'var(--text-faint)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-faint)' }} />
-      Local cache · {ageStr}
-    </span>
+    <span
+      title={tooltip}
+      style={{
+        width: 10, height: 10, borderRadius: '50%',
+        background: color,
+        boxShadow: live ? `0 0 8px ${color}` : 'none',
+        cursor: 'default',
+        flexShrink: 0,
+        animation: live ? 'pulse-dot 2s ease-in-out infinite' : 'none',
+      }}
+    />
   )
 }
