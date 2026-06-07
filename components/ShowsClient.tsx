@@ -1,262 +1,287 @@
 'use client'
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import NavDock from './NavDock'
-import type { Show, UserLocation, ScoredArtist } from '@/types'
-import { haversineDistanceMiles } from '@/lib/location'
+import type { Show, UserLocation, ScoredArtist, EventSource, TouringHub } from '@/types'
 
 interface Props {
-  location: UserLocation
-  hubIds: string[]
-  lastfmUser: { displayName: string } | null
+  initialLocation: UserLocation
+  initialHubs: TouringHub[]
+  initialArtistNames: string[]
 }
+
+const CACHE_KEY = 'showfinder_shows_cache'
+const CACHE_TTL_MS = 30 * 60 * 1000
 
 type SortKey = 'date' | 'artist' | 'price' | 'distance' | 'relevance'
-type SourceFilter = 'all' | 'ticketmaster' | 'bandsintown'
+type SourceFilter = 'all' | EventSource
 
-function formatDate(date: string, time?: string, fmt: '12h' | '24h' = '12h') {
-  const d = new Date(date + 'T12:00:00')
-  const dateStr = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  if (!time) return dateStr
-  if (fmt === '24h') return `${dateStr} · ${time}`
-  const [h, m] = time.split(':').map(Number)
-  const ampm = h >= 12 ? 'PM' : 'AM'; const h12 = h % 12 || 12
-  return `${dateStr} · ${h12}:${String(m).padStart(2,'0')} ${ampm}`
+function dateLabel(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  if (diff < 0) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'short' }) + ` · ${Math.round(diff)}d`
+  if (diff < 30) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function relativeDate(date: string): string {
-  const show = new Date(date + 'T12:00:00')
-  const now = new Date(); now.setHours(0,0,0,0)
-  const diff = Math.round((show.getTime() - now.getTime()) / 86_400_000)
-  if (diff < 0) return 'past'
-  if (diff === 0) return 'today'
-  if (diff === 1) return 'tomorrow'
-  if (diff < 7) return `in ${diff} days`
-  if (diff < 30) return `in ${Math.floor(diff / 7)}w`
-  return `in ${Math.floor(diff / 30)}mo`
+function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+  const R = 3959
+  const dLat = (b.latitude - a.latitude) * Math.PI / 180
+  const dLng = (b.longitude - a.longitude) * Math.PI / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.latitude * Math.PI / 180) * Math.cos(b.latitude * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
 }
 
-function statusColor(status: Show['status']) {
-  switch (status) {
-    case 'cancelled': return { bg: 'rgba(255,77,77,0.15)', fg: '#ff8080', label: 'CANCELLED' }
-    case 'postponed': return { bg: 'rgba(255,167,38,0.15)', fg: '#ffa726', label: 'POSTPONED' }
-    case 'rescheduled': return { bg: 'rgba(255,167,38,0.15)', fg: '#ffa726', label: 'RESCHEDULED' }
-    case 'offsale': return { bg: 'rgba(120,120,120,0.15)', fg: 'var(--text-dim)', label: 'SOLD OUT' }
-    default: return null
-  }
-}
-
-function sourceLabel(source: Show['source']) {
-  if (source === 'both') return 'TM · BIT'
-  if (source === 'ticketmaster') return 'TM'
-  return 'BIT'
-}
-
-export default function ShowsClient({ location, hubIds, lastfmUser }: Props) {
+export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
+  const [location, setLocation] = useState<UserLocation>(initialLocation)
+  const [hubs, setHubs] = useState<TouringHub[]>(initialHubs)
   const [shows, setShows] = useState<Show[]>([])
-  const [loading, setLoading] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const [error, setError] = useState('')
-  const [fromCache, setFromCache] = useState(false)
-  const [timeFormat] = useState<'12h' | '24h'>('12h')
-  const [cityFilter, setCityFilter] = useState<Set<string>>(new Set())
-  const [view, setView] = useState<'list' | 'map'>('list')
-  const [sortKey, setSortKey] = useState<SortKey>('date')
+  const [artists, setArtists] = useState<ScoredArtist[]>([])
+  const [loading, setLoading] = useState(true)
+  const [sort, setSort] = useState<SortKey>('date')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
-  const [artistPlays, setArtistPlays] = useState<Record<string, number>>({})
-  const fetched = useRef(false)
+  const [cityFilter, setCityFilter] = useState<string>('all')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 25
 
   useEffect(() => {
-    if (fetched.current) return; fetched.current = true
-    const cacheKey = `shows_${location.city}_${hubIds.join('_')}`
-    const cached = localStorage.getItem(cacheKey)
-    if (cached) {
+    if (typeof window !== 'undefined') {
       try {
-        const d = JSON.parse(cached)
-        if (Date.now() - d.ts < 6 * 60 * 60 * 1000) {
-          setShows(d.shows); setFromCache(true); return
+        const raw = localStorage.getItem(CACHE_KEY)
+        if (raw) {
+          const { ts, data, locKey } = JSON.parse(raw)
+          const cur = `${location.latitude},${location.longitude}`
+          if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
+            setShows(data.shows ?? [])
+            setArtists(data.artists ?? [])
+            setLoading(false)
+            return
+          }
         }
       } catch {}
     }
-    fetchShows()
+    loadShows()
+    loadShows()
   }, [])
 
-  async function fetchShows() {
-    setLoading(true); setProgress(10)
-    const intv = setInterval(() => setProgress(p => Math.min(p + Math.random() * 8, 85)), 600)
-    try {
-      const artistRes = await fetch(`/api/artists`)
-      const artistData = await artistRes.json()
-      const artistList: ScoredArtist[] = artistData.artists ?? []
-      const plays: Record<string, number> = {}
-      for (const a of artistList) plays[a.name.toLowerCase()] = a.playCount ?? 0
-      setArtistPlays(plays)
-
-      const res = await fetch('/api/shows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          artists: artistList.slice(0, 50).map((a: any) => ({ id: a.mbid ?? a.name, name: a.name })),
-          location,
-          enabledHubIds: hubIds,
-        }),
-      })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      clearInterval(intv); setProgress(100)
-      setShows(data.shows ?? []); setFromCache(data.fromCache ?? false)
-      const cacheKey = `shows_${location.city}_${hubIds.join('_')}`
-      localStorage.setItem(cacheKey, JSON.stringify({ shows: data.shows, ts: Date.now() }))
-      localStorage.setItem('lastShowsUrl', window.location.pathname + window.location.search)
-    } catch (e) { setError('Failed to load shows.'); clearInterval(intv) }
+  async function loadShows() {
+    setLoading(true)
+    const url = new URL('/api/shows', window.location.origin)
+    url.searchParams.set('lat', String(location.latitude))
+    url.searchParams.set('lng', String(location.longitude))
+    if (hubs.length) url.searchParams.set('hubs', hubs.map(h => h.id).join(','))
+    const res = await fetch(url.toString())
+    const data = await res.json()
+    setShows(data.shows ?? [])
+    setArtists(data.artists ?? [])
     setLoading(false)
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${location.latitude},${location.longitude}` })) } catch {}
   }
 
-  const cities = useMemo(() => [...new Set(shows.map(s => s.venue.city))].sort(), [shows])
+  function refresh() {
+    try { localStorage.removeItem(CACHE_KEY) } catch {}
+    loadShows()
+  }
 
-  const filtered = useMemo(() => {
+  function onLocationChange(loc: UserLocation, h: TouringHub[]) {
+    setLocation(loc); setHubs(h); setPage(1)
+    try { localStorage.removeItem(CACHE_KEY) } catch {}
+    setTimeout(loadShows, 0)
+  }
+
+  // Map artist name -> relevance score (lower index = more relevant)
+  const artistScore = useMemo(() => {
+    const m = new Map<string, number>()
+    artists.forEach((a, i) => m.set(a.name.toLowerCase(), i))
+    return m
+  }, [artists])
+
+  const cities = useMemo(() => {
+    const s = new Set<string>()
+    shows.forEach(show => { if (show.venue?.city) s.add(show.venue.city) })
+    return Array.from(s).sort()
+  }, [shows])
+
+  const filteredSorted = useMemo(() => {
     let list = shows
-    if (cityFilter.size > 0) list = list.filter(s => cityFilter.has(s.venue.city))
-    if (sourceFilter !== 'all') {
-      if (sourceFilter === 'ticketmaster') list = list.filter(s => s.source === 'ticketmaster' || s.source === 'both')
-      else list = list.filter(s => s.source === 'bandsintown' || s.source === 'both')
-    }
-    const sorted = [...list]
-    switch (sortKey) {
-      case 'date':
-        sorted.sort((a, b) => a.date.localeCompare(b.date))
-        break
-      case 'artist':
-        sorted.sort((a, b) => a.artistName.localeCompare(b.artistName))
-        break
-      case 'price': {
-        const p = (s: Show) => s.priceRange?.min ?? Number.POSITIVE_INFINITY
-        sorted.sort((a, b) => p(a) - p(b))
-        break
+    if (sourceFilter !== 'all') list = list.filter(s => s.source === sourceFilter)
+    if (cityFilter !== 'all') list = list.filter(s => s.venue?.city === cityFilter)
+    const withDist = list.map(s => ({ ...s, _dist: s.venue?.latitude != null && s.venue?.longitude != null ? haversineMi(location, { latitude: s.venue.latitude, longitude: s.venue.longitude }) : Infinity }))
+    withDist.sort((a, b) => {
+      if (sort === 'date') return new Date(a.date).getTime() - new Date(b.date).getTime()
+      if (sort === 'artist') return a.artistName.localeCompare(b.artistName)
+      if (sort === 'price') return (a.priceRange?.min ?? Infinity) - (b.priceRange?.min ?? Infinity)
+      if (sort === 'distance') return a._dist - b._dist
+      if (sort === 'relevance') {
+        const ar = artistScore.get(a.artistName.toLowerCase()) ?? 999
+        const br = artistScore.get(b.artistName.toLowerCase()) ?? 999
+        if (ar !== br) return ar - br
+        return new Date(a.date).getTime() - new Date(b.date).getTime()
       }
-      case 'distance': {
-        const d = (s: Show) => haversineDistanceMiles(location.latitude, location.longitude, s.venue.latitude, s.venue.longitude)
-        sorted.sort((a, b) => d(a) - d(b))
-        break
-      }
-      case 'relevance': {
-        const p = (s: Show) => artistPlays[s.artistName.toLowerCase()] ?? 0
-        sorted.sort((a, b) => p(b) - p(a))
-        break
-      }
-    }
-    return sorted
-  }, [shows, cityFilter, sourceFilter, sortKey, artistPlays, location])
+      return 0
+    })
+    return withDist
+  }, [shows, sort, sourceFilter, cityFilter, location, artistScore])
 
-  const sorts: { key: SortKey; label: string }[] = [
-    { key: 'date', label: 'Date' },
-    { key: 'artist', label: 'Artist' },
-    { key: 'price', label: 'Price' },
-    { key: 'distance', label: 'Distance' },
-    { key: 'relevance', label: 'Relevance' },
-  ]
+  const total = filteredSorted.length
+  const pageShows = filteredSorted.slice(0, page * PAGE_SIZE)
+  const hasMore = total > pageShows.length
+
+  // Group by date
+  const grouped = useMemo(() => {
+    const g: { [k: string]: typeof pageShows } = {}
+    pageShows.forEach(s => {
+      const k = new Date(s.date).toDateString()
+      if (!g[k]) g[k] = []
+      g[k].push(s)
+    })
+    return g
+  }, [pageShows])
+
+  const filtersOpen = sourceFilter !== 'all' || cityFilter !== 'all' || sort !== 'date'
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: '100px' }}>
-      <div style={{ maxWidth: '720px', margin: '0 auto', padding: '40px 16px 20px' }}>
-        <div style={{ marginBottom: '20px' }}>
-          <h1 style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: '26px', color: 'var(--text)', letterSpacing: '-0.5px' }}>Shows</h1>
-          <p style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
-            {shows.length > 0 ? `${shows.length} show${shows.length === 1 ? '' : 's'} near ${location.city}${location.region ? `, ${location.region}` : ''}` : `Near ${location.city}${location.region ? `, ${location.region}` : ''}`}
-            {fromCache && <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}> · cached</span>}
-          </p>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div>
+            <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Shows</h1>
+            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>
+              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{hubs.length > 1 ? ` +${hubs.length - 1}` : ''}
+            </p>
+          </div>
+          <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
         </div>
 
-        {loading && (
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ height: '3px', background: 'var(--surface)', borderRadius: '2px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', background: 'var(--accent)', width: `${progress}%`, transition: 'width 0.4s ease', borderRadius: '2px' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
+          <div>
+            <div className="section-label" style={{ marginBottom: 8 }}>Sort by</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {([['date','Date'],['artist','Artist'],['price','Price'],['distance','Distance'],['relevance','Relevance']] as [SortKey, string][]).map(([val, label]) => (
+                <button key={val} onClick={() => setSort(val)} className={sort === val ? 'chip active' : 'chip'}>{label}</button>
+              ))}
             </div>
-            <p style={{ fontFamily: 'Outfit', fontSize: '12px', color: 'var(--text-dim)', marginTop: '8px' }}>Searching Ticketmaster + Bandsintown for your artists…</p>
           </div>
-        )}
 
-        {error && <p style={{ color: 'var(--red)', fontFamily: 'Outfit', fontSize: '14px', marginBottom: '16px' }}>{error}</p>}
+          <div className="divider" />
 
-        {!loading && shows.length > 0 && (
-          <>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <button onClick={() => setView('list')} style={{ padding: '6px 12px', borderRadius: '7px', border: '1px solid var(--border)', background: view === 'list' ? 'var(--accent)' : 'var(--surface)', color: view === 'list' ? '#000' : 'var(--text-muted)', fontFamily: 'Outfit', fontSize: '12px', cursor: 'pointer' }}>List</button>
-              <button onClick={() => setView('map')} style={{ padding: '6px 12px', borderRadius: '7px', border: '1px solid var(--border)', background: view === 'map' ? 'var(--accent)' : 'var(--surface)', color: view === 'map' ? '#000' : 'var(--text-muted)', fontFamily: 'Outfit', fontSize: '12px', cursor: 'pointer' }}>Map</button>
+          <div>
+            <div className="section-label" style={{ marginBottom: 8 }}>Source</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(['all','bandsintown','ticketmaster','songkick'] as SourceFilter[]).map(s => (
+                <button key={s} onClick={() => setSourceFilter(s)} className={sourceFilter === s ? 'chip active' : 'chip'}>{s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}</button>
+              ))}
             </div>
+          </div>
 
-            <div style={{ marginBottom: '12px' }}>
-              <p style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'Syne', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Sort by</p>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {sorts.map(s => (
-                  <button key={s.key} onClick={() => setSortKey(s.key)} style={{ fontSize: '12px', fontFamily: 'Outfit', padding: '6px 12px', borderRadius: '7px', border: '1px solid var(--border)', background: sortKey === s.key ? 'var(--accent)' : 'var(--surface)', color: sortKey === s.key ? '#000' : 'var(--text-muted)', cursor: 'pointer', fontWeight: sortKey === s.key ? 600 : 400 }}>{s.label}</button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '14px' }}>
-              <p style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'Syne', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>Source</p>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {(['all','ticketmaster','bandsintown'] as SourceFilter[]).map(s => (
-                  <button key={s} onClick={() => setSourceFilter(s)} style={{ fontSize: '11px', fontFamily: 'Outfit', padding: '5px 10px', borderRadius: '6px', border: `1px solid ${sourceFilter === s ? 'var(--accent)' : 'var(--border)'}`, background: sourceFilter === s ? 'rgba(200,255,87,0.12)' : 'var(--surface)', color: sourceFilter === s ? 'var(--accent)' : 'var(--text-dim)', cursor: 'pointer' }}>{s === 'all' ? 'All' : s === 'ticketmaster' ? 'Ticketmaster' : 'Bandsintown'}</button>
-                ))}
-              </div>
-            </div>
-
-            {cities.length > 1 && (
-              <div style={{ marginBottom: '14px' }}>
-                <p style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'Syne', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>City</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {cities.map(c => (
-                    <button key={c} onClick={() => setCityFilter(prev => { const n = new Set(prev); n.has(c) ? n.delete(c) : n.add(c); return n })} style={{ padding: '4px 10px', borderRadius: '6px', border: `1px solid ${cityFilter.has(c) ? 'var(--accent)' : 'var(--border)'}`, background: cityFilter.has(c) ? 'rgba(200,255,87,0.12)' : 'var(--surface)', color: cityFilter.has(c) ? 'var(--accent)' : 'var(--text-dim)', fontFamily: 'Outfit', fontSize: '11px', cursor: 'pointer' }}>{c}</button>
-                  ))}
+          {cities.length > 1 && (
+            <>
+              <div className="divider" />
+              <div>
+                <div className="section-label" style={{ marginBottom: 8 }}>City</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button onClick={() => setCityFilter('all')} className={cityFilter === 'all' ? 'chip active' : 'chip'}>All</button>
+                  {cities.map(c => <button key={c} onClick={() => setCityFilter(c)} className={cityFilter === c ? 'chip active' : 'chip'}>{c}</button>)}
                 </div>
               </div>
+            </>
+          )}
+
+          {filtersOpen && (
+            <button onClick={() => { setSort('date'); setSourceFilter('all'); setCityFilter('all') }} className="btn-ghost" style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 11 }}>Clear filters</button>
+          )}
+        </div>
+
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 96, animationDelay: `${i * 0.05}s` }} />)}
+          </div>
+        ) : pageShows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-dim)', fontFamily: 'Outfit, sans-serif', fontSize: 14 }}>
+            <p>No shows found.</p>
+            <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 8 }}>Try a different location or check back later.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {Object.entries(grouped).map(([dateKey, items]) => (
+              <section key={dateKey}>
+                <div className="section-label" style={{ marginBottom: 8, animation: 'fadeUp 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
+                  {new Date(dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {items.map((s, i) => {
+                    const rel = artistScore.get(s.artistName.toLowerCase())
+                    const isSaved = artists.find(a => a.name.toLowerCase() === s.artistName.toLowerCase() && a.source === 'manual')
+                    const isTopMatch = rel !== undefined && rel < 3
+                    return (
+                      <a
+                        key={s.id}
+                        href={s.ticketUrl ?? s.bandsintownUrl ?? '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="card"
+                        style={{
+                          display: 'flex',
+                          padding: 16,
+                          gap: 14,
+                          textDecoration: 'none',
+                          color: 'inherit',
+                          animation: `fadeUp 0.4s ${i * 0.03}s cubic-bezier(0.16,1,0.3,1) both`,
+                        }}
+                      >
+                        <div style={{
+                          width: 56, minWidth: 56, textAlign: 'center',
+                          padding: '6px 0',
+                          borderRight: '1px solid var(--border)',
+                          fontFamily: 'Syne, sans-serif', fontWeight: 700,
+                        }}>
+                          <div style={{ fontSize: 20, color: 'var(--text)', lineHeight: 1 }}>
+                            {new Date(s.date).getDate()}
+                          </div>
+                          <div style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>
+                            {new Date(s.date).toLocaleDateString('en-US', { month: 'short' })}
+                          </div>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                            {isTopMatch && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>TOP MATCH</span>}
+                            {isSaved && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '1px 6px', letterSpacing: 0.5 }}>SAVED</span>}
+                            <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{s.source}</span>
+                          </div>
+                          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, color: 'var(--text)', fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{s.artistName}</p>
+                          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                            {s.venue?.name}{s.venue?.city ? ` · ${s.venue.city}` : ''}
+                          </p>
+                          {s._dist !== Infinity && (
+                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                              {Math.round(s._dist)} mi away
+                            </p>
+                          )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 }}>
+                          <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
+                            {new Date(s.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                          </span>
+                          {s.priceRange?.min != null && s.priceRange.min > 0 && (
+                            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>${Math.round(s.priceRange.min)}</span>
+                          )}
+                        </div>
+                      </a>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
+            {hasMore && (
+              <button onClick={() => setPage(p => p + 1)} className="btn-ghost" style={{ padding: '12px 20px', fontSize: 13, alignSelf: 'center' }}>
+                Show {Math.min(PAGE_SIZE, total - pageShows.length)} more
+              </button>
             )}
-          </>
-        )}
-
-        {!loading && view === 'list' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {filtered.length === 0 && !loading && <p style={{ fontFamily: 'Outfit', fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>{shows.length === 0 ? 'No upcoming shows found.' : 'No shows match the filters.'}</p>}
-            {filtered.map(show => {
-              const sc = statusColor(show.status)
-              const dist = Math.round(haversineDistanceMiles(location.latitude, location.longitude, show.venue.latitude, show.venue.longitude))
-              const rel = relativeDate(show.date)
-              return (
-                <div key={show.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
-                  {sc && (
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: sc.bg, color: sc.fg, fontSize: '10px', fontFamily: 'Syne', fontWeight: 700, padding: '3px 12px', letterSpacing: '1px' }}>
-                      {sc.label}
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginTop: sc ? 14 : 0 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '15px', color: 'var(--text)', marginBottom: '4px', letterSpacing: '-0.2px' }}>{show.artistName}</p>
-                      <p style={{ fontFamily: 'Outfit', fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>{show.venue.name} · {show.venue.city}, {show.venue.region}</p>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: 'Outfit', fontSize: '11px', color: 'var(--text)' }}>{formatDate(show.date, show.startTime, timeFormat)}</span>
-                        {rel !== 'past' && <span style={{ fontSize: '10px', color: 'var(--accent)', fontFamily: 'Syne', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{rel}</span>}
-                        <span style={{ fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'Outfit' }}>· {dist}mi</span>
-                        {show.priceRange && <span style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'Outfit' }}>· ${show.priceRange.min}{show.priceRange.max > show.priceRange.min ? `–$${show.priceRange.max}` : ''}</span>}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', flexShrink: 0, alignItems: 'flex-end' }}>
-                      <span style={{ fontSize: '9px', color: 'var(--text-dim)', fontFamily: 'Syne', fontWeight: 700, letterSpacing: '0.5px', border: '1px solid var(--border)', borderRadius: '4px', padding: '2px 6px' }}>{sourceLabel(show.source)}</span>
-                      {show.ticketUrl && <a href={show.ticketUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', background: 'var(--accent)', color: '#000', borderRadius: '6px', padding: '5px 10px', fontFamily: 'Syne', fontWeight: 700, textDecoration: 'none', whiteSpace: 'nowrap' }}>Tickets</a>}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {!loading && view === 'map' && (
-          <div style={{ height: '500px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', overflow: 'hidden' }}>
-            <p style={{ padding: '20px', fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)' }}>Map view — switch to /map for full view</p>
           </div>
         )}
       </div>
+
       <NavDock />
     </div>
   )

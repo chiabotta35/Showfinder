@@ -1,4 +1,4 @@
 import AuthForms from '@/components/AuthForms'
-export default function SignupPage() {
+export default function AuthPage() {
   return <AuthForms />
 }

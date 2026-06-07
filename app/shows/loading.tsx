@@ -1,14 +1,16 @@
 export default function Loading() {
   return (
-    <div style={{ maxWidth: '720px', margin: '0 auto', padding: '40px 16px 20px' }}>
-      <div style={{ height: '32px', width: '120px', background: 'var(--surface)', borderRadius: '6px', marginBottom: '20px' }} />
-      <div style={{ height: '3px', background: 'var(--surface)', borderRadius: '2px', marginBottom: '24px', overflow: 'hidden' }}>
-        <div style={{ width: '40%', height: '100%', background: 'var(--accent)', borderRadius: '2px', animation: 'slide 1.6s ease-in-out infinite' }} />
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '80px 20px' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div className="skeleton" style={{ height: 32, width: 160, marginBottom: 12 }} />
+        <div className="skeleton" style={{ height: 16, width: 220, marginBottom: 32 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 24 }}>
+          {Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 28, width: 70, animationDelay: `${i * 0.05}s` }} />)}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 96, animationDelay: `${i * 0.05}s` }} />)}
+        </div>
       </div>
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} style={{ height: '76px', background: 'var(--surface)', borderRadius: '12px', marginBottom: '8px', opacity: 1 - i * 0.1 }} />
-      ))}
-      <style>{`@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }`}</style>
     </div>
   )
 }

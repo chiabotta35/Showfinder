@@ -1,111 +1,87 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import NavDock from './NavDock'
+import LocationBar from './LocationBar'
+import type { UserLocation, TouringHub } from '@/types'
+import { useRouter } from 'next/navigation'
 
-interface SeedArtist { name: string; playCount?: number; score?: number }
-interface RecArtist { name: string; match: number; basedOn: string; url: string; isRediscovery: boolean }
-interface DriftedArtist { name: string; playCount?: number; score?: number; url?: string }
+interface Props {
+  isLoggedIn: boolean
+  savedLocation?: { city: string; region: string; lat: number; lng: number } | null
+}
 
-export default function DiscoverClient() {
-  const [tab, setTab] = useState<'recs' | 'drifted'>('recs')
-  const [loading, setLoading] = useState(true)
-  const [seeds, setSeeds] = useState<SeedArtist[]>([])
-  const [drifted, setDrifted] = useState<DriftedArtist[]>([])
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [recs, setRecs] = useState<RecArtist[]>([])
-  const [recsLoading, setRecsLoading] = useState(false)
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [noLastfm, setNoLastfm] = useState(false)
+export default function DiscoverClient({ isLoggedIn, savedLocation }: Props) {
+  const router = useRouter()
+  const [location, setLocation] = useState<UserLocation | null>(null)
+  const [hubs, setHubs] = useState<TouringHub[]>([])
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  useEffect(() => {
-    const dis = JSON.parse(localStorage.getItem('dismissedArtists') ?? '[]')
-    setDismissed(new Set(dis))
-    fetch('/api/discover').then(r => r.json()).then(d => {
-      if (d.noLastfm) { setNoLastfm(true); setLoading(false); return }
-      setSeeds(d.seeds ?? []); setDrifted(d.drifted ?? [])
-      setLoading(false)
-    })
-  }, [])
-
-  function toggleSeed(name: string) {
-    setSelected(prev => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n })
+  async function search(e: React.FormEvent) {
+    e.preventDefault()
+    if (!query.trim()) return
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/artists/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }) })
+      const data = await res.json()
+      if (data.artists?.length) {
+        await fetch('/api/artists/saved', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: data.artists[0].name, mbid: data.artists[0].mbid }) })
+        if (location) goToShows(location, hubs)
+        else router.push('/artists')
+      } else {
+        setError('No artists found. Try a different name.')
+      }
+    } catch {
+      setError('Search failed. Please try again.')
+    } finally { setLoading(false) }
   }
 
-  async function getRecs() {
-    if (selected.size === 0) return
-    setRecsLoading(true)
-    const res = await fetch('/api/discover', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ artists: Array.from(selected) }) })
-    const data = await res.json(); setRecs(data.recommended ?? []); setRecsLoading(false)
+  function goToShows(loc: UserLocation, h: TouringHub[]) {
+    const params = new URLSearchParams({ lat: String(loc.latitude), lng: String(loc.longitude), city: loc.city, region: loc.region, country: loc.country, hubs: h.map(x => x.id).join(',') })
+    router.push(`/shows?${params.toString()}`)
   }
-
-  function dismiss(name: string) {
-    const next = new Set(dismissed); next.add(name); setDismissed(next)
-    localStorage.setItem('dismissedArtists', JSON.stringify(Array.from(next)))
-  }
-
-  if (loading) return <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'Outfit' }}>Loading…<NavDock /></div>
-
-  if (noLastfm) return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', gap: '16px' }}>
-      <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '18px', color: 'var(--text)' }}>Connect Last.fm first</p>
-      <a href="/api/auth/lastfm" style={{ background: 'var(--accent)', color: '#000', borderRadius: '10px', padding: '12px 24px', fontFamily: 'Syne', fontWeight: 700, fontSize: '14px', textDecoration: 'none' }}>Connect Last.fm</a>
-      <NavDock />
-    </div>
-  )
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: '100px' }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '40px 16px 20px' }}>
-        <h1 style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: '26px', color: 'var(--text)', letterSpacing: '-0.5px', marginBottom: '20px' }}>Discover</h1>
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-          {[['recs','Recommendations'],['drifted','Drifted from']].map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t as any)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border)', background: tab === t ? 'var(--accent)' : 'var(--surface)', color: tab === t ? '#000' : 'var(--text-muted)', fontFamily: 'Outfit', fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>{label}</button>
-          ))}
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 20px 20px' }}>
+        <div style={{ marginBottom: 32, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
+          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Discover</h1>
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, color: 'var(--text-muted)' }}>Search for an artist to find their upcoming shows.</p>
         </div>
 
-        {tab === 'recs' && (
-          <div>
-            <p style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>Pick artists to base recommendations on:</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
-              {seeds.map(a => (
-                <button key={a.name} onClick={() => toggleSeed(a.name)} style={{ padding: '6px 12px', borderRadius: '8px', border: `1px solid ${selected.has(a.name) ? 'var(--accent)' : 'var(--border)'}`, background: selected.has(a.name) ? 'rgba(200,255,87,0.15)' : 'var(--surface)', color: selected.has(a.name) ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'Outfit', fontSize: '12px', cursor: 'pointer', fontWeight: selected.has(a.name) ? 600 : 400 }}>{a.name}</button>
-              ))}
-            </div>
-            {selected.size > 0 && (
-              <button onClick={getRecs} disabled={recsLoading} style={{ background: 'var(--accent)', color: '#000', border: 'none', borderRadius: '10px', padding: '11px 22px', fontFamily: 'Syne', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginBottom: '20px', opacity: recsLoading ? 0.6 : 1 }}>{recsLoading ? 'Finding…' : `Recommend based on ${selected.size} artist${selected.size > 1 ? 's' : ''}`}</button>
-            )}
-            {recs.length > 0 && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                {recs.map(r => (
-                  <div key={r.name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <p style={{ fontFamily: 'Outfit', fontSize: '14px', color: 'var(--text)', fontWeight: 500 }}>{r.name}</p>
-                      <p style={{ fontFamily: 'Outfit', fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>Based on {r.basedOn} · {Math.round(r.match * 100)}% match{r.isRediscovery ? ' · Revisit' : ' · New'}</p>
-                    </div>
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: 'var(--accent)', fontFamily: 'Outfit', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px' }}>View →</a>
-                  </div>
-                ))}
-              </div>
-            )}
+        <form onSubmit={search} style={{ marginBottom: 32, animation: 'fadeUp 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', background: 'var(--surface)',
+            border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+            padding: '6px 6px 6px 16px', gap: 10, transition: 'border-color 0.15s',
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--text-muted)' }}>
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
+            </svg>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Artist name…"
+              style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 14, padding: '8px 0' }}
+            />
+            <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '9px 18px', fontSize: 13 }}>
+              {loading ? '…' : 'Search'}
+            </button>
           </div>
-        )}
+          {error && <p style={{ fontSize: 12, color: 'var(--red)', fontFamily: 'Outfit, sans-serif', marginTop: 8 }}>{error}</p>}
+        </form>
 
-        {tab === 'drifted' && (
-          <div>
-            <p style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)', marginBottom: '14px' }}>Artists you loved but haven't played recently:</p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {drifted.filter(a => !dismissed.has(a.name)).map(a => (
-                <div key={a.name} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <p style={{ fontFamily: 'Outfit', fontSize: '14px', color: 'var(--text)', fontWeight: 500 }}>{a.name}</p>
-                    {a.playCount && <p style={{ fontFamily: 'Outfit', fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>{a.playCount.toLocaleString()} total plays</p>}
-                  </div>
-                  <button onClick={() => dismiss(a.name)} style={{ fontSize: '11px', color: 'var(--text-dim)', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px', cursor: 'pointer', fontFamily: 'Outfit' }}>Dismiss</button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="divider" />
+
+        <div style={{ marginBottom: 12 }}>
+          <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 4, letterSpacing: '-0.3px' }}>Set your location</h2>
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)' }}>Search results will use your selected area.</p>
+        </div>
+        <LocationBar
+          savedLocation={savedLocation}
+          onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }}
+        />
       </div>
       <NavDock />
     </div>

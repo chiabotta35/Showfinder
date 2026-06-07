@@ -1,11 +1,12 @@
 export default function Loading() {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-        <div style={{ width: '28px', height: '28px', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <p style={{ fontFamily: 'Outfit', fontSize: '12px', color: 'var(--text-dim)' }}>Loading map…</p>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '80px 20px' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+        <div className="skeleton" style={{ height: 32, width: 180, marginBottom: 12 }} />
+        <div className="skeleton" style={{ height: 16, width: 200, marginBottom: 32 }} />
+        <div className="skeleton" style={{ height: 48, marginBottom: 24 }} />
+        <div className="skeleton" style={{ height: 400 }} />
       </div>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

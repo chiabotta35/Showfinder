@@ -1,66 +1,75 @@
 'use client'
-import NavDock from './NavDock'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import NavDock from './NavDock'
 
 interface Props {
-  lastfmUser: { username: string; displayName: string; scrobbleCount?: number; timeFormat?: string } | null
-  savedArtistCount: number
+  user: { displayName: string; lastfmUsername: string; createdAt: string; city: string; region: string }
+  lastfmConnected: boolean
 }
 
-export default function AccountClient({ lastfmUser, savedArtistCount }: Props) {
-  const [timeFormat, setTimeFormat] = useState(lastfmUser?.timeFormat ?? '12h')
-  const [saving, setSaving] = useState(false)
+export default function AccountClient({ user, lastfmConnected }: Props) {
+  const router = useRouter()
+  const [connecting, setConnecting] = useState(false)
 
-  async function savePrefs(fmt: '12h' | '24h') {
-    setTimeFormat(fmt); setSaving(true)
-    await fetch('/api/account/preferences', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timeFormat: fmt }) })
-    setSaving(false)
+  async function disconnect() {
+    if (!confirm('Disconnect Last.fm? Your saved artists will remain.')) return
+    await fetch('/api/account/disconnect', { method: 'POST' })
+    router.refresh()
   }
 
+  function connectLastfm() {
+    setConnecting(true)
+    const w = window.open('/api/auth/lastfm', 'lastfm', 'width=600,height=700')
+    const tick = setInterval(() => {
+      if (w?.closed) { clearInterval(tick); setConnecting(false); router.refresh() }
+    }, 500)
+  }
+
+  const memberSince = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: '100px' }}>
-      <div style={{ maxWidth: '560px', margin: '0 auto', padding: '48px 20px 20px' }}>
-        <h1 style={{ fontFamily: 'Syne', fontWeight: 800, fontSize: '28px', color: 'var(--text)', letterSpacing: '-0.5px', marginBottom: '28px' }}>Account</h1>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 20px 20px' }}>
+        <div style={{ marginBottom: 32, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
+          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Account</h1>
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>Manage your profile and connections.</p>
+        </div>
 
-        {lastfmUser ? (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '15px', color: 'var(--text)' }}>{lastfmUser.displayName}</p>
-                <p style={{ fontFamily: 'Outfit', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>@{lastfmUser.username} on Last.fm</p>
-                {lastfmUser.scrobbleCount && <p style={{ fontFamily: 'Outfit', fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>{lastfmUser.scrobbleCount.toLocaleString()} scrobbles</p>}
-              </div>
-              <a href="/api/auth/lastfm?popup=0" style={{ fontSize: '11px', color: 'var(--accent)', fontFamily: 'Outfit', textDecoration: 'none', border: '1px solid var(--border)', borderRadius: '6px', padding: '4px 10px' }}>Reconnect</a>
-            </div>
-          </div>
-        ) : (
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-            <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '8px' }}>Connect Last.fm</p>
-            <a href="/api/auth/lastfm" style={{ display: 'inline-block', background: 'var(--accent)', color: '#000', borderRadius: '8px', padding: '8px 16px', fontFamily: 'Syne', fontWeight: 700, fontSize: '13px', textDecoration: 'none' }}>Connect</a>
-          </div>
-        )}
+        <div className="card" style={{ padding: 20, marginBottom: 12, animation: 'fadeUp 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <div className="section-label" style={{ marginBottom: 12 }}>Profile</div>
+          <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 4 }}>{user.displayName}</p>
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)' }}>@{user.lastfmUsername}</p>
+          {user.city && (
+            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{user.city}{user.region ? `, ${user.region}` : ''}</p>
+          )}
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Member since {memberSince}</p>
+        </div>
 
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-          <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '12px' }}>Preferences</p>
+        <div className="card" style={{ padding: 20, animation: 'fadeUp 0.6s 0.2s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <div className="section-label" style={{ marginBottom: 12 }}>Connections</div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)' }}>Time format</span>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              {(['12h','24h'] as const).map(fmt => (
-                <button key={fmt} onClick={() => savePrefs(fmt)} style={{ padding: '5px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: timeFormat === fmt ? 'var(--accent)' : 'var(--surface-2)', color: timeFormat === fmt ? '#000' : 'var(--text-muted)', fontFamily: 'Outfit', fontSize: '12px', cursor: 'pointer', fontWeight: timeFormat === fmt ? 600 : 400 }}>{fmt}</button>
-              ))}
+            <div>
+              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>Last.fm</p>
+              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: lastfmConnected ? 'var(--accent)' : 'var(--text-dim)', marginTop: 2 }}>
+                {lastfmConnected ? 'Connected' : 'Not connected'}
+              </p>
             </div>
+            {lastfmConnected ? (
+              <button onClick={disconnect} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Disconnect</button>
+            ) : (
+              <button onClick={connectLastfm} disabled={connecting} className="btn-primary" style={{ padding: '8px 14px', fontSize: 12 }}>
+                {connecting ? '…' : 'Connect'}
+              </button>
+            )}
           </div>
-          {saving && <p style={{ fontSize: '11px', color: 'var(--text-dim)', fontFamily: 'Outfit', marginTop: '8px' }}>Saved</p>}
         </div>
 
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '14px', padding: '20px', marginBottom: '16px' }}>
-          <p style={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '14px', color: 'var(--text)', marginBottom: '4px' }}>Stats</p>
-          <p style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)' }}>{savedArtistCount} manually saved artists</p>
+        <div style={{ marginTop: 24, animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <form action="/api/auth/logout" method="POST">
+            <button type="submit" className="btn-ghost" style={{ width: '100%', padding: '12px', fontSize: 13 }}>Sign out</button>
+          </form>
         </div>
-
-        <form action="/api/auth/logout" method="POST">
-          <button type="submit" style={{ width: '100%', background: 'none', border: '1px solid rgba(255,77,77,0.3)', borderRadius: '10px', padding: '12px', fontFamily: 'Outfit', fontSize: '13px', color: 'var(--red)', cursor: 'pointer' }}>Sign out</button>
-        </form>
       </div>
       <NavDock />
     </div>

@@ -1,30 +1,50 @@
 'use client'
 import { useState, useEffect } from 'react'
 import NavDock from './NavDock'
-import type { UserLocation, Show } from '@/types'
-import dynamic from 'next/dynamic'
-const LeafletMap = dynamic(() => import('./LeafletMap'), { ssr: false })
+import LeafletMap from './LeafletMap'
+import LocationBar from './LocationBar'
+import type { Show, UserLocation, TouringHub } from '@/types'
 
-interface Props { location: UserLocation; hubIds: string[] }
+interface Props {
+  savedLocation?: { city: string; region: string; lat: number; lng: number } | null
+}
 
-export default function MapClient({ location, hubIds }: Props) {
+export default function MapClient({ savedLocation }: Props) {
+  const [location, setLocation] = useState<UserLocation | null>(savedLocation ? { city: savedLocation.city, region: savedLocation.region, country: 'US', latitude: savedLocation.lat, longitude: savedLocation.lng } : null)
+  const [hubs, setHubs] = useState<TouringHub[]>([])
   const [shows, setShows] = useState<Show[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    const cacheKey = `shows_${location.city}_${hubIds.join('_')}`
-    const cached = localStorage.getItem(cacheKey)
-    if (cached) { try { const d = JSON.parse(cached); if (Date.now() - d.ts < 6 * 60 * 60 * 1000) { setShows(d.shows); setLoading(false); return } } catch {} }
-    setLoading(false)
-  }, [])
-
-  if (loading) return <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontFamily: 'Outfit' }}>Loading map…</div>
+    if (!location) return
+    setLoading(true)
+    const url = new URL('/api/shows', window.location.origin)
+    url.searchParams.set('lat', String(location.latitude))
+    url.searchParams.set('lng', String(location.longitude))
+    if (hubs.length) url.searchParams.set('hubs', hubs.map(h => h.id).join(','))
+    fetch(url.toString())
+      .then(r => r.json())
+      .then(d => setShows(d.shows ?? []))
+      .finally(() => setLoading(false))
+  }, [location, hubs])
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100vh' }}>
-      <LeafletMap shows={shows} center={[location.latitude, location.longitude]} />
-      <div style={{ position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)', zIndex: 1000, background: 'rgba(17,17,17,0.9)', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px 16px' }}>
-        <p style={{ fontFamily: 'Outfit', fontSize: '13px', color: 'var(--text-muted)' }}>{shows.length} shows near {location.city}</p>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ maxWidth: 720, margin: '0 auto', width: '100%', padding: '32px 20px 16px' }}>
+        <div style={{ marginBottom: 16, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
+          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Map</h1>
+          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>{shows.length} shows plotted{location ? ` near ${location.city}` : ''}</p>
+        </div>
+        <LocationBar savedLocation={savedLocation} onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }} />
+      </div>
+      <div style={{ flex: 1, minHeight: 400, position: 'relative', animation: 'fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
+        {location ? (
+          <LeafletMap shows={shows} center={[location.latitude, location.longitude]} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-dim)', fontFamily: 'Outfit, sans-serif', fontSize: 14 }}>
+            Set a location to see shows on a map.
+          </div>
+        )}
       </div>
       <NavDock />
     </div>

@@ -1,46 +1,78 @@
 'use client'
 import { useState, useRef } from 'react'
 
-interface Props { onAdd: (name: string, mbid?: string) => void; savedNames: Set<string> }
+interface Props {
+  onAdd: (name: string, mbid?: string) => Promise<void>
+  savedNames: Set<string>
+}
 
 export default function ArtistSearch({ onAdd, savedNames }: Props) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<{ name: string; listeners: string; mbid: string }[]>([])
-  const [showDrop, setShowDrop] = useState(false)
+  const [results, setResults] = useState<{ name: string; mbid?: string; listeners?: number }[]>([])
   const [loading, setLoading] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [error, setError] = useState('')
+  const [adding, setAdding] = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const v = e.target.value; setQuery(v); setShowDrop(true)
-    if (timer.current) clearTimeout(timer.current)
-    if (v.length < 2) { setResults([]); return }
-    timer.current = setTimeout(async () => {
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value; setQuery(val); setError('')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    if (val.trim().length < 2) { setResults([]); return }
+    timerRef.current = setTimeout(async () => {
       setLoading(true)
-      const res = await fetch(`/api/artists/search?q=${encodeURIComponent(v)}`)
-      const data = await res.json(); setResults(data.results ?? []); setLoading(false)
-    }, 250)
+      try {
+        const res = await fetch('/api/artists/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: val }) })
+        const data = await res.json()
+        setResults(data.artists ?? [])
+      } catch { setError('Search failed.') }
+      finally { setLoading(false) }
+    }, 400)
   }
 
-  function select(r: { name: string; mbid: string }) {
-    onAdd(r.name, r.mbid || undefined); setQuery(''); setResults([]); setShowDrop(false)
+  async function add(a: { name: string; mbid?: string }) {
+    setAdding(a.name)
+    try { await onAdd(a.name, a.mbid); setQuery(''); setResults([]) }
+    catch { setError('Failed to add artist.') }
+    finally { setAdding(null) }
   }
 
   return (
-    <div style={{ position: 'relative', marginBottom: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '10px 14px', gap: '8px' }}>
-        <span style={{ fontSize: '13px', opacity: 0.4 }}>+</span>
-        <input value={query} onChange={handleInput} onFocus={() => setShowDrop(true)} onBlur={() => setTimeout(() => setShowDrop(false), 150)} placeholder="Add an artist manually…" style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontFamily: 'Outfit', fontSize: '14px' }} />
-        {loading && <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>…</span>}
+    <div style={{ marginBottom: 20 }}>
+      <div className="section-label" style={{ marginBottom: 8 }}>Add an artist</div>
+      <div style={{
+        display: 'flex', alignItems: 'center', background: 'var(--surface)',
+        border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
+        padding: '6px 14px', gap: 10, transition: 'border-color 0.15s',
+      }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ color: 'var(--text-muted)' }}>
+          <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/>
+        </svg>
+        <input
+          value={query}
+          onChange={onChange}
+          placeholder="Search for an artist…"
+          style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none', color: 'var(--text)', fontFamily: 'Outfit, sans-serif', fontSize: 14, padding: '8px 0' }}
+        />
+        {loading && <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>…</span>}
       </div>
-      {showDrop && results.length > 0 && (
-        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', zIndex: 100 }}>
+      {error && <p style={{ fontSize: 11, color: 'var(--red)', fontFamily: 'Outfit, sans-serif', marginTop: 6 }}>{error}</p>}
+
+      {results.length > 0 && (
+        <div className="card" style={{ marginTop: 8, padding: 0, overflow: 'hidden' }}>
           {results.map((r, i) => {
-            const already = savedNames.has(r.name.toLowerCase())
+            const isSaved = savedNames.has(r.name.toLowerCase())
             return (
-              <button key={r.mbid || i} onMouseDown={() => !already && select(r)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left', padding: '10px 14px', background: 'none', border: 'none', color: already ? 'var(--text-dim)' : 'var(--text)', fontFamily: 'Outfit', fontSize: '13px', cursor: already ? 'default' : 'pointer', borderBottom: i < results.length - 1 ? '1px solid var(--border)' : 'none' }}>
-                <span>{r.name}</span>
-                <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>{already ? '✓ added' : parseInt(r.listeners).toLocaleString() + ' listeners'}</span>
-              </button>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
+                <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, color: 'var(--text)' }}>{r.name}</span>
+                <button
+                  onClick={() => add(r)}
+                  disabled={isSaved || adding === r.name}
+                  className="btn-primary"
+                  style={{ fontSize: 11, padding: '6px 12px', opacity: isSaved ? 0.5 : 1 }}
+                >
+                  {isSaved ? 'Added' : adding === r.name ? '…' : 'Add'}
+                </button>
+              </div>
             )
           })}
         </div>
