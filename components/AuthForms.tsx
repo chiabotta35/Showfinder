@@ -27,9 +27,15 @@ export default function AuthForms() {
 
   function connectLastfm() {
     setLastfmConnecting(true)
-    const w = window.open('/api/auth/lastfm', 'lastfm', 'width=600,height=700')
+    const w = window.open('/api/auth/lastfm?popup=1', 'lastfm', 'width=600,height=700')
     const tick = setInterval(() => {
-      if (w?.closed) { clearInterval(tick); setLastfmConnecting(false); router.push('/artists') }
+      if (w?.closed) {
+        clearInterval(tick)
+        setLastfmConnecting(false)
+        // The opener's AuthToast posts a 'lastfm-auth' message on success/failure
+        // and reloads on success. Just push to /artists as a fallback after a short delay.
+        setTimeout(() => { try { router.push('/artists') } catch {} }, 500)
+      }
     }, 500)
   }
 

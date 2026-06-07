@@ -54,22 +54,39 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [page, setPage] = useState(1)
   const PAGE_SIZE = 25
 
+  // On mount, hydrate from localStorage if no URL params were given.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = localStorage.getItem(CACHE_KEY)
-        if (raw) {
-          const { ts, data, locKey } = JSON.parse(raw)
-          const cur = `${location.latitude},${location.longitude}`
-          if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
-            setShows(data.shows ?? [])
-            setArtists(data.artists ?? [])
-            setLoading(false)
-            return
+    if (typeof window === 'undefined') return
+    try {
+      const stored = localStorage.getItem('lastShowsLocation')
+      if (stored) {
+        const loc = JSON.parse(stored)
+        if (loc && isFinite(loc.latitude) && isFinite(loc.longitude) && (loc.latitude !== 0 || loc.longitude !== 0)) {
+          setLocation({ city: loc.city, region: loc.region, country: loc.country || 'US', latitude: loc.latitude, longitude: loc.longitude })
+          if (Array.isArray(loc.hubs) && loc.hubs.length) {
+            const knownHubs = (window as any).__touringHubs ?? null
+            // We'll fetch the hub list once and merge ids → objects.
+            fetch('/api/location?lat=' + loc.latitude + '&lng=' + loc.longitude)
+              .then(r => r.json())
+              .then(d => { if (Array.isArray(d.suggestedHubs)) setHubs(d.suggestedHubs) })
+              .catch(() => {})
           }
         }
-      } catch {}
-    }
+      }
+    } catch {}
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (raw) {
+        const { ts, data, locKey } = JSON.parse(raw)
+        const cur = `${location.latitude},${location.longitude}`
+        if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
+          setShows(data.shows ?? [])
+          setArtists(data.artists ?? [])
+          setLoading(false)
+          return
+        }
+      }
+    } catch {}
     loadShows()
   }, [])
 
@@ -161,16 +178,40 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const pageShows = filteredSorted.slice(0, page * PAGE_SIZE)
   const hasMore = total > pageShows.length
 
-  // Group by date
+  // Group by the active sort key so section labels match what the user is sorting by.
   const grouped = useMemo(() => {
-    const g: { [k: string]: typeof pageShows } = {}
-    pageShows.forEach(s => {
-      const k = new Date(s.date).toDateString()
-      if (!g[k]) g[k] = []
-      g[k].push(s)
-    })
-    return g
-  }, [pageShows])
+    type Item = typeof pageShows[number]
+    const buckets: { key: string; label: string; items: Item[] }[] = []
+    const indexOf: { [k: string]: number } = {}
+    function push(key: string, label: string, s: Item) {
+      if (key in indexOf) buckets[indexOf[key]].items.push(s)
+      else { indexOf[key] = buckets.length; buckets.push({ key, label, items: [s] }) }
+    }
+    for (const s of pageShows) {
+      if (sort === 'artist') {
+        push(s.artistName.toLowerCase(), s.artistName, s)
+      } else if (sort === 'price') {
+        const p = s.priceRange?.min
+        const key = p == null ? 'no-price' : p < 30 ? 'under-30' : p < 60 ? '30-60' : p < 100 ? '60-100' : p < 200 ? '100-200' : '200+'
+        const label = p == null ? 'Price TBA' : key === 'under-30' ? 'Under $30' : key === '30-60' ? '$30 – $60' : key === '60-100' ? '$60 – $100' : key === '100-200' ? '$100 – $200' : '$200+'
+        push(key, label, s)
+      } else if (sort === 'distance') {
+        const d = (s as any)._dist ?? Infinity
+        const key = !isFinite(d) ? 'far' : d < 50 ? 'under-50' : d < 100 ? '50-100' : d < 200 ? '100-200' : d < 400 ? '200-400' : '400+'
+        const label = key === 'under-50' ? 'Under 50 mi' : key === '50-100' ? '50 – 100 mi' : key === '100-200' ? '100 – 200 mi' : key === '200-400' ? '200 – 400 mi' : key === '400+' ? '400+ mi' : 'Distance unknown'
+        push(key, label, s)
+      } else if (sort === 'relevance') {
+        // Group by artist since relevance = artist rank.
+        push(s.artistName.toLowerCase(), s.artistName, s)
+      } else {
+        // Default: by date
+        const d = new Date(s.date)
+        const key = d.toDateString()
+        push(key, d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }), s)
+      }
+    }
+    return buckets
+  }, [pageShows, sort])
 
   const filtersOpen = sourceFilter !== 'all' || cityFilter !== 'all' || sort !== 'date'
 
@@ -239,70 +280,82 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {Object.entries(grouped).map(([dateKey, items]) => (
-              <section key={dateKey}>
+            {grouped.map(({ key, label, items }) => (
+              <section key={key}>
                 <div className="section-label" style={{ marginBottom: 8, animation: 'fadeUp 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
-                  {new Date(dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                  {label}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {items.map((s, i) => {
                     const rel = artistScore.get(s.artistName.toLowerCase())
                     const isSaved = artists.find(a => a.name.toLowerCase() === s.artistName.toLowerCase() && a.source === 'manual')
                     const isTopMatch = rel !== undefined && rel < 3
+                    const link = s.ticketUrl ?? s.bandsintownUrl ?? ''
                     return (
-                      <a
+                      <div
                         key={s.id}
-                        href={s.ticketUrl ?? s.bandsintownUrl ?? '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="card"
                         style={{
                           display: 'flex',
-                          padding: 16,
-                          gap: 14,
-                          textDecoration: 'none',
-                          color: 'inherit',
+                          padding: 0,
+                          overflow: 'hidden',
                           animation: `fadeUp 0.4s ${i * 0.03}s cubic-bezier(0.16,1,0.3,1) both`,
                         }}
                       >
-                        <div style={{
-                          width: 56, minWidth: 56, textAlign: 'center',
-                          padding: '6px 0',
-                          borderRight: '1px solid var(--border)',
-                          fontFamily: 'Syne, sans-serif', fontWeight: 700,
-                        }}>
-                          <div style={{ fontSize: 20, color: 'var(--text)', lineHeight: 1 }}>
-                            {new Date(s.date).getDate()}
+                        <a
+                          href={link || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'flex',
+                            flex: 1,
+                            padding: 16,
+                            gap: 14,
+                            textDecoration: 'none',
+                            color: 'inherit',
+                            minWidth: 0,
+                          }}
+                        >
+                          <div style={{
+                            width: 56, minWidth: 56, textAlign: 'center',
+                            padding: '6px 0',
+                            borderRight: '1px solid var(--border)',
+                            fontFamily: 'Syne, sans-serif', fontWeight: 700,
+                          }}>
+                            <div style={{ fontSize: 20, color: 'var(--text)', lineHeight: 1 }}>
+                              {new Date(s.date).getDate()}
+                            </div>
+                            <div style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>
+                              {new Date(s.date).toLocaleDateString('en-US', { month: 'short' })}
+                            </div>
                           </div>
-                          <div style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>
-                            {new Date(s.date).toLocaleDateString('en-US', { month: 'short' })}
-                          </div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                            {isTopMatch && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>TOP MATCH</span>}
-                            {isSaved && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '1px 6px', letterSpacing: 0.5 }}>SAVED</span>}
-                            <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{s.source}</span>
-                          </div>
-                          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, color: 'var(--text)', fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{s.artistName}</p>
-                          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                            {s.venue?.name}{s.venue?.city ? ` · ${s.venue.city}` : ''}
-                          </p>
-                          {s._dist !== Infinity && (
-                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
-                              {Math.round(s._dist)} mi away
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                              {isTopMatch && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>TOP MATCH</span>}
+                              {isSaved && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '1px 6px', letterSpacing: 0.5 }}>SAVED</span>}
+                              <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{s.source}</span>
+                            </div>
+                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, color: 'var(--text)', fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{s.artistName}</p>
+                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                              {s.venue?.name}{s.venue?.city ? ` · ${s.venue.city}` : ''}
                             </p>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 }}>
-                          <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
-                            {new Date(s.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                          </span>
-                          {s.priceRange?.min != null && s.priceRange.min > 0 && (
-                            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>${Math.round(s.priceRange.min)}</span>
-                          )}
-                        </div>
-                      </a>
+                            {s._dist !== Infinity && (
+                              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
+                                {Math.round(s._dist)} mi away
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 }}>
+                            <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
+                              {new Date(s.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                            </span>
+                            {s.priceRange?.min != null && s.priceRange.min > 0 && (
+                              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>${Math.round(s.priceRange.min)}</span>
+                            )}
+                          </div>
+                        </a>
+                        <CopyLinkButton link={link} />
+                      </div>
                     )
                   })}
                 </div>
@@ -402,5 +455,43 @@ function CountUnit({ value, label }: { value: number; label: string }) {
       </div>
       <div style={{ fontSize: 8, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>{label}</div>
     </div>
+  )
+}
+
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false)
+  async function onCopy(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!link) return
+    try {
+      await navigator.clipboard.writeText(link)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {}
+  }
+  if (!link) return <div style={{ width: 1, borderLeft: '1px solid var(--border)' }} />
+  return (
+    <button
+      onClick={onCopy}
+      title={copied ? 'Copied!' : 'Copy ticket link'}
+      aria-label="Copy ticket link"
+      style={{
+        width: 44, minWidth: 44,
+        background: 'transparent',
+        border: 'none',
+        borderLeft: '1px solid var(--border)',
+        color: copied ? 'var(--accent)' : 'var(--text-dim)',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontFamily: 'Syne, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        transition: 'color 0.15s, background 0.15s',
+      }}
+      onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--hover)' }}
+      onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = 'var(--text-dim)'; e.currentTarget.style.background = 'transparent' }}
+    >
+      {copied ? 'OK' : 'COPY'}
+    </button>
   )
 }

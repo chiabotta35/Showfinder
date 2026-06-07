@@ -2,6 +2,9 @@ import type { Show, TouringHub, UserLocation } from '@/types'
 const TM_API = 'https://app.ticketmaster.com/discovery/v2'
 const API_KEY = process.env.TICKETMASTER_API_KEY!
 const attractionCache = new Map<string, string | null>()
+// Cache event results by (attractionId, lat, lng) for the lifetime of a single batch.
+const eventCache = new Map<string, { ts: number; events: any[] }>()
+const EVENT_CACHE_TTL_MS = 5 * 60 * 1000
 
 function normalizeStr(s: string): string { return s.toLowerCase().replace(/[^a-z0-9\s]/g,'').trim() }
 
@@ -39,7 +42,17 @@ function haversineDistanceMiles(lat1: number, lng1: number, lat2: number, lng2: 
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
 }
 
-export async function getBatchArtistEvents(artists: { name: string; id: string }[], location: UserLocation, hubs: TouringHub[], concurrency = 4): Promise<Show[]> {
+// Dedupe hubs that are already inside the home location's radius, so we don't re-query the same area.
+function dedupedPoints(location: UserLocation, hubs: TouringHub[], radiusMiles = 60): { lat: number; lng: number }[] {
+  const out: { lat: number; lng: number }[] = [{ lat: location.latitude, lng: location.longitude }]
+  for (const h of hubs) {
+    if (haversineDistanceMiles(location.latitude, location.longitude, h.latitude, h.longitude) <= radiusMiles) continue
+    out.push({ lat: h.latitude, lng: h.longitude })
+  }
+  return out
+}
+
+export async function getBatchArtistEvents(artists: { name: string; id: string }[], location: UserLocation, hubs: TouringHub[], concurrency = 6): Promise<Show[]> {
   const allShows: Show[] = []
   for (let i = 0; i < artists.length; i += concurrency) {
     const chunk = artists.slice(i, i + concurrency)
@@ -53,14 +66,24 @@ async function getArtistEvents(artistName: string, artistId: string, location: U
   try {
     const attractionId = await getAttractionId(artistName)
     if (!attractionId) return []
-    const points = [{ lat: location.latitude, lng: location.longitude }, ...hubs.map(h => ({ lat: h.latitude, lng: h.longitude }))]
+    // Skip hubs already covered by the home location's radius.
+    const points = dedupedPoints(location, hubs, 60)
     const allShows: Show[] = []; const seenIds = new Set<string>()
     for (const point of points) {
-      const params = new URLSearchParams({ apikey: API_KEY, attractionId, latlong: `${point.lat},${point.lng}`, radius: '60', unit: 'miles', size: '20', sort: 'date,asc', classificationName: 'music' })
-      const res = await fetch(`${TM_API}/events.json?${params}`, { cache: 'no-store' })
-      if (!res.ok) { console.warn(`[ticketmaster] ${artistName}: ${res.status}`); continue }
-      const data = await res.json()
-      for (const e of (data._embedded?.events ?? [])) {
+      const cacheKey = `${attractionId}|${point.lat.toFixed(2)}|${point.lng.toFixed(2)}`
+      const cached = eventCache.get(cacheKey)
+      let events: any[]
+      if (cached && Date.now() - cached.ts < EVENT_CACHE_TTL_MS) {
+        events = cached.events
+      } else {
+        const params = new URLSearchParams({ apikey: API_KEY, attractionId, latlong: `${point.lat},${point.lng}`, radius: '60', unit: 'miles', size: '20', sort: 'date,asc', classificationName: 'music' })
+        const res = await fetch(`${TM_API}/events.json?${params}`, { cache: 'no-store' })
+        if (!res.ok) { console.warn(`[ticketmaster] ${artistName}: ${res.status}`); continue }
+        const data = await res.json()
+        events = data._embedded?.events ?? []
+        eventCache.set(cacheKey, { ts: Date.now(), events })
+      }
+      for (const e of events) {
         if (seenIds.has(e.id)) continue; seenIds.add(e.id)
         const venue = e._embedded?.venues?.[0]
         const pr = e.priceRanges?.[0]

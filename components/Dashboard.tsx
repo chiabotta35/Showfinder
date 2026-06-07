@@ -94,13 +94,17 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
 
   function goToShows() {
     if (!location) return
-    const params = new URLSearchParams({ lat: String(location.latitude), lng: String(location.longitude), city: location.city, region: location.region, country: location.country, hubs: hubs.map(h => h.id).join(',') })
-    const url = `/shows?${params}`
     if (artists.length) {
       try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
     }
-    localStorage.setItem('lastShowsUrl', url)
-    window.location.href = url
+    try {
+      localStorage.setItem('lastShowsLocation', JSON.stringify({
+        city: location.city, region: location.region, country: location.country,
+        latitude: location.latitude, longitude: location.longitude,
+        hubs: hubs.map(h => h.id),
+      }))
+    } catch {}
+    window.location.href = '/shows'
   }
 
   const periods = [['7day','7d'],['1month','1m'],['3month','3m'],['6month','6m'],['12month','12m'],['overall','All']]

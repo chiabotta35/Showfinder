@@ -88,5 +88,8 @@ export async function GET(req: Request): Promise<NextResponse<ShowsResponse | { 
   if (artists.length === 0) {
     return NextResponse.json({ shows: [], totalFound: 0, deduplicatedCount: 0, locationFilter: { homeLocation: { city, region, country, latitude: lat, longitude: lng }, enabledHubs: getEnabledHubs(enabledHubIds), radiusMiles: 80 }, fromCache: false })
   }
-  return runShowQuery(artists, { city, region, country, latitude: lat, longitude: lng }, enabledHubIds)
+  // Cap the artists actually queried to keep API usage reasonable.
+  // Top 30 from the Last.fm ordering is what users will care about most.
+  const capped = artists.slice(0, 30)
+  return runShowQuery(capped, { city, region, country, latitude: lat, longitude: lng }, enabledHubIds)
 }

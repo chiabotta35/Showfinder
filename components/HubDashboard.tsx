@@ -32,12 +32,17 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
   }, [isLoggedIn])
 
   function goToShows(loc: UserLocation, h: TouringHub[]) {
-    const params = new URLSearchParams({ lat: String(loc.latitude), lng: String(loc.longitude), city: loc.city, region: loc.region, country: loc.country, hubs: h.map(x => x.id).join(',') })
-    const url = `/shows?${params.toString()}`
     if (artists.length) {
       try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
     }
-    router.push(url)
+    try {
+      localStorage.setItem('lastShowsLocation', JSON.stringify({
+        city: loc.city, region: loc.region, country: loc.country,
+        latitude: loc.latitude, longitude: loc.longitude,
+        hubs: h.map(x => x.id),
+      }))
+    } catch {}
+    router.push('/shows')
   }
 
   function gotoArtists() {
