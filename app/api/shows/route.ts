@@ -24,13 +24,14 @@ async function runShowQuery(artists: { id: string; name: string }[], location: U
   const hubs = getEnabledHubs(enabledHubIds)
   const cacheKey = buildCacheKey(artists.map(a => a.name), location.city, enabledHubIds)
   const cached = getCachedShows(cacheKey)
-  if (cached) {
+  // Only serve from cache if it has actual results — don't negative-cache empty responses.
+  if (cached && cached.length > 0) {
     return NextResponse.json({ shows: cached, totalFound: cached.length, deduplicatedCount: 0, locationFilter: { homeLocation: location, enabledHubs: hubs, radiusMiles: 80 }, fromCache: true })
   }
   try {
     const [bitShows, tmShows] = await Promise.all([getBITEvents(artists, location, hubs), getTMEvents(artists, location, hubs)])
     const { shows, duplicatesRemoved } = deduplicateShows([...bitShows, ...tmShows])
-    setCachedShows(cacheKey, shows, artists.map(a => a.name), location.city)
+    if (shows.length > 0) setCachedShows(cacheKey, shows, artists.map(a => a.name), location.city)
     return NextResponse.json({ shows, totalFound: bitShows.length + tmShows.length, deduplicatedCount: duplicatesRemoved, locationFilter: { homeLocation: location, enabledHubs: hubs, radiusMiles: 80 }, fromCache: false })
   } catch (e) {
     console.error('[shows]', e)
@@ -50,15 +51,24 @@ export async function GET(req: Request): Promise<NextResponse<ShowsResponse | { 
   const { searchParams } = new URL(req.url)
   const lat = parseFloat(searchParams.get('lat') ?? '')
   const lng = parseFloat(searchParams.get('lng') ?? '')
-  const city = (searchParams.get('city') ?? '').trim()
-  const region = (searchParams.get('region') ?? '').trim()
+  let city = (searchParams.get('city') ?? '').trim()
+  let region = (searchParams.get('region') ?? '').trim()
   const country = (searchParams.get('country') ?? 'US').trim()
   const hubsParam = (searchParams.get('hubs') ?? '').trim()
-  if (!isFinite(lat) || !isFinite(lng) || !city) {
-    return NextResponse.json({ error: 'lat, lng, and city are required' }, { status: 400 })
+  if (!isFinite(lat) || !isFinite(lng)) {
+    return NextResponse.json({ error: 'lat and lng are required' }, { status: 400 })
   }
   const enabledHubIds = hubsParam ? hubsParam.split(',').filter(Boolean) : []
   const session = await getSession()
+  // Fall back to saved city/region if not provided in the URL.
+  if (!city && session.userId) {
+    const user = getUserById(session.userId)
+    if (user?.lastLocation) {
+      city = user.lastLocation.city
+      region = user.lastLocation.region
+    }
+  }
+  if (!city) city = 'Unknown'
   let artists: { id: string; name: string }[] = []
   if (session.userId) {
     const user = getUserById(session.userId)

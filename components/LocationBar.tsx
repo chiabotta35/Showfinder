@@ -65,7 +65,16 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
     if (savedLocation) {
       const loc: UserLocation = { city: savedLocation.city, region: savedLocation.region, country: 'US', latitude: savedLocation.lat, longitude: savedLocation.lng }
       setLocation(loc); setQuery(`${loc.city}, ${loc.region}`)
-      fetchHubs(loc.latitude, loc.longitude, loc)
+      // Load hubs silently on mount, but don't fire onLocationChange —
+      // this is a read, not a user action.
+      ;(async () => {
+        try {
+          const res = await fetch(`/api/location?lat=${loc.latitude}&lng=${loc.longitude}`)
+          if (!res.ok) return
+          const data = await res.json()
+          setHubs(data.suggestedHubs ?? [])
+        } catch {}
+      })()
     }
   }, [])
 

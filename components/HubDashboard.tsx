@@ -74,8 +74,13 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
         <div style={{ animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both' }}>
           <LocationBar
             savedLocation={savedLocation}
-            onLocationChange={(loc, h) => { setLocation(loc); setHubs(h); goToShows(loc, h) }}
+            onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }}
           />
+          {location && (
+            <button onClick={() => goToShows(location, hubs)} className="btn-primary" style={{ marginTop: 16, padding: '12px 24px', fontSize: 14, width: '100%' }}>
+              Find shows near {location.city} →
+            </button>
+          )}
         </div>
       </div>
       <NavDock />
