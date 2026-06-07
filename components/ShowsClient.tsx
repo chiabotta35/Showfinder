@@ -51,6 +51,9 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
+  // 'cache' = served from server cache; 'api' = live API fetch; null = unknown / client cache
+  const [dataSource, setDataSource] = useState<'cache' | 'api' | 'client' | null>(null)
+  const [lastFetchAt, setLastFetchAt] = useState<number | null>(null)
   const [sort, setSort] = useState<SortKey>('date')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [cityFilter, setCityFilter] = useState<string>('all')
@@ -86,6 +89,8 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
           setShows(data.shows ?? [])
           setArtists(data.artists ?? [])
           setLoading(false)
+          setDataSource('client')
+          setLastFetchAt(ts)
           return
         }
       }
@@ -154,6 +159,8 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     setShows(data.shows ?? [])
     setArtists(data.artists ?? [])
     setLoading(false)
+    setLastFetchAt(Date.now())
+    setDataSource(data.fromCache ? 'cache' : 'api')
     try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${locForUrl.latitude},${locForUrl.longitude}|${hubIdsToSend.sort().join(',')}|${artistNames.slice().sort().join(',')}` })) } catch {}
   }
 
@@ -285,8 +292,9 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
           <div>
             <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Shows</h1>
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>
-              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}
+            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span>{total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}</span>
+              {dataSource && lastFetchAt && <DataSourceBadge source={dataSource} ts={lastFetchAt} />}
             </p>
           </div>
           <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
@@ -595,5 +603,37 @@ function CopyLinkButton({ link }: { link: string }) {
     >
       {copied ? 'OK' : 'COPY'}
     </button>
+  )
+}
+
+function DataSourceBadge({ source, ts }: { source: 'cache' | 'api' | 'client'; ts: number }) {
+  const [, force] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => force(x => x + 1), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const ageMin = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
+  const ageStr = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin / 60)}h ago`
+  if (source === 'api') {
+    return (
+      <span title={`Live API result from ${new Date(ts).toLocaleTimeString()}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', background: 'var(--accent-soft)', color: 'var(--accent)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 6px var(--accent)' }} />
+        Live · {ageStr}
+      </span>
+    )
+  }
+  if (source === 'cache') {
+    return (
+      <span title={`Served from server cache (${new Date(ts).toLocaleTimeString()})`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', border: '1px solid var(--border)', color: 'var(--text-dim)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-dim)' }} />
+        Server cache · {ageStr}
+      </span>
+    )
+  }
+  return (
+    <span title={`Served from local browser cache (${new Date(ts).toLocaleTimeString()})`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 'var(--r-xs)', border: '1px solid var(--border)', color: 'var(--text-faint)', fontFamily: 'Syne, sans-serif', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--text-faint)' }} />
+      Local cache · {ageStr}
+    </span>
   )
 }
