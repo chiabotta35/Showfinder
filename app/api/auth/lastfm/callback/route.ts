@@ -53,16 +53,49 @@ export async function GET(req: Request) {
 }
 
 function popupHtml(msg: string): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
-    (function() {
-      try {
-        if (window.opener) {
-          window.opener.postMessage('${msg}', window.location.origin);
-        }
-      } catch(e) {}
-      setTimeout(function() { window.close(); }, 250);
-    })();
-  <\/script><p style="font-family:sans-serif;color:#666;text-align:center;margin-top:40px">${msg === 'lastfm_auth_success' ? 'Connected! Closing...' : 'Auth failed. You can close this.'}</p></body></html>`
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Last.fm</title>
+<style>
+  html,body{margin:0;height:100%;background:#0a0a0a;color:#e8e8e8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;align-items:center;justify-content:center}
+  .card{text-align:center;padding:24px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#c8ff57;display:inline-block;margin-right:8px;animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  h1{font-size:16px;font-weight:600;margin:0 0 6px}
+  p{font-size:12px;color:#888;margin:0}
+</style></head><body>
+<div class="card">
+  ${msg === 'lastfm_auth_success'
+    ? '<h1><span class="dot"></span>Connected to Last.fm</h1><p>Closing…</p>'
+    : '<h1>Auth failed</h1><p>You can close this window.</p>'}
+</div>
+<script>
+  (function() {
+    var msg = ${JSON.stringify(msg)};
+    var origin = window.location.origin;
+    var closed = false;
+    function notify() {
+      try { if (window.opener && !window.opener.closed) window.opener.postMessage({ type: 'lastfm-auth', status: msg }, origin); } catch(e) {}
+    }
+    function attemptClose() {
+      notify();
+      try { window.close(); } catch(e) {}
+      // Some browsers block the first close attempt; retry briefly then give up.
+      var tries = 0;
+      var id = setInterval(function() {
+        tries++;
+        try { window.close(); } catch(e) {}
+        if (tries >= 8) clearInterval(id);
+      }, 150);
+    }
+    if (document.readyState === 'complete') attemptClose();
+    else window.addEventListener('load', attemptClose);
+    // Fallback: hide the body after a moment so the user can close manually.
+    setTimeout(function() {
+      var b = document.body;
+      if (b) b.style.opacity = '0.4';
+    }, 1500);
+  })();
+</script>
+</body></html>`
 }
 
 function popupResponse(msg: string) {
