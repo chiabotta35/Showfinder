@@ -35,7 +35,7 @@ function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: 
 }
 
 export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
-  const { settings, toggleTrackedArtist } = useSettings()
+  const { settings, toggleTrackedEvent } = useSettings()
   const [location, setLocation] = useState<UserLocation>(initialLocation)
   // All hubs we know about (from server + location API). Used for the toggle UI.
   const [allHubs, setAllHubs] = useState<TouringHub[]>(initialHubs)
@@ -114,19 +114,21 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
         const near: TouringHub[] = Array.isArray(d.nearHubs) ? d.nearHubs : []
         if (suggested.length) {
           setAllHubs(suggested)
-          const suggestedIds = new Set(suggested.map(h => h.id))
+          const nearIds = new Set(near.map(h => h.id))
+          // Only re-enable saved hubs that are within the near radius (≤350mi).
+          // Distant hubs like Nashville must be manually toggled on each session.
           const initialEnabled = savedHubIds.length
-            ? new Set(savedHubIds.filter(id => suggestedIds.has(id)))
-            : new Set(near.map(h => h.id))  // default = close hubs only
+            ? new Set(savedHubIds.filter(id => nearIds.has(id)))
+            : new Set(near.map(h => h.id))
           setEnabledHubs(initialEnabled)
           const hubIdsToUse = initialEnabled.size > 0 ? Array.from(initialEnabled) : near.map(h => h.id)
           loadShows(savedLoc, hubIdsToUse)
         } else {
-          loadShows(savedLoc, savedHubIds)
+          loadShows(savedLoc, near.map(h => h.id))
         }
       })
       .catch(() => {
-        if (mounted) loadShows(savedLoc, savedHubIds)
+        if (mounted) loadShows(savedLoc, [])
       })
     return () => { mounted = false }
   }, [])
@@ -474,18 +476,18 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
                           </div>
                         </a>
                         <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleTrackedArtist(s.artistName) }}
-                          title={settings.trackedArtists.includes(s.artistName) ? 'Unfollow' : 'Follow'}
-                          aria-label={settings.trackedArtists.includes(s.artistName) ? 'Unfollow' : 'Follow'}
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleTrackedEvent({ id: s.id, artistName: s.artistName, date: s.date, venueName: s.venue?.name, venueCity: s.venue?.city, ticketUrl: s.ticketUrl }) }}
+                          title={settings.trackedEvents.some(t => t.id === s.id) ? 'Unstar' : 'Star this show'}
+                          aria-label={settings.trackedEvents.some(t => t.id === s.id) ? 'Unstar' : 'Star'}
                           style={{
                             width: 40, minWidth: 40, background: 'transparent', border: 'none',
                             borderLeft: '1px solid var(--border)',
-                            color: settings.trackedArtists.includes(s.artistName) ? '#eab308' : 'var(--text-dim)',
+                            color: settings.trackedEvents.some(t => t.id === s.id) ? '#eab308' : 'var(--text-dim)',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                             transition: 'color 0.15s',
                           }}
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill={settings.trackedArtists.includes(s.artistName) ? '#eab308' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill={settings.trackedEvents.some(t => t.id === s.id) ? '#eab308' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
                         </button>
                         <CopyLinkButton link={link} />
                       </div>

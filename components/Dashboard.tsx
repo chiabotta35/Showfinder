@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import NavDock from './NavDock'
 import LocationBar from './LocationBar'
 import ArtistSearch from './ArtistSearch'
+import SettingsPanel from './SettingsPanel'
 import { useSettings } from './SettingsContext'
 import type { ScoredArtist, UserLocation, TouringHub } from '@/types'
 
@@ -23,7 +24,7 @@ function saveHidden(s: Set<string>) {
 }
 
 export default function Dashboard({ lastfmUser, savedLocation }: Props) {
-  const { settings, toggleTrackedArtist } = useSettings()
+  const { settings } = useSettings()
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<string>('6month')
@@ -33,6 +34,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [showHidden, setShowHidden] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => { setHidden(loadHidden()) }, [])
   useEffect(() => { loadArtists() }, [period])
@@ -96,8 +98,6 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
 
   async function goToShows() {
     if (!location) return
-    // Make sure we have the artist list to search with — fetch fresh if the
-    // state is still empty (e.g. user clicked before the initial load finished).
     let artistList = artists
     if (artistList.length === 0) {
       try {
@@ -127,15 +127,80 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   const hiddenArtists = artists.filter(a => hidden.has(a.name.toLowerCase()))
   const visibleArtists = showHidden ? artists : artists.filter(a => !hidden.has(a.name.toLowerCase()))
   const activeVisibleCount = artists.filter(a => !hidden.has(a.name.toLowerCase())).length
+  const trackedCount = settings.trackedEvents?.length ?? 0
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 20px' }}>
+        {/* Header */}
         <div style={{ marginBottom: 24, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>My Artists</h1>
-          {lastfmUser && <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>From {lastfmUser.displayName}'s Last.fm</p>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>ShowFinder</h1>
+              {lastfmUser && <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>Welcome back, {lastfmUser.displayName}</p>}
+            </div>
+            <button
+              onClick={() => setShowSettings(true)}
+              style={{
+                background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)',
+                padding: '8px 12px', cursor: 'pointer', color: 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
+                transition: 'all 0.15s',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </button>
+          </div>
         </div>
 
+        {/* Quick stats */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24, animation: 'fadeUp 0.5s 0.05s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <a href="/artists" style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: 'var(--accent)' }}>{loading ? '-' : activeVisibleCount}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Artists</div>
+            </div>
+          </a>
+          <a href="/shows" style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: 'var(--text)' }}>{location ? 'Find' : '-'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Shows</div>
+            </div>
+          </a>
+          <a href="/tracked" style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: '#eab308' }}>{trackedCount}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Tracked</div>
+            </div>
+          </a>
+        </div>
+
+        {/* Quick actions */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 24, animation: 'fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
+          <a href="/discover" style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m16 8-3 6-6 3 3-6z"/></svg>
+              <div>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Discover</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recommendations</div>
+              </div>
+            </div>
+          </a>
+          <button onClick={() => setShowSettings(true)} style={{ textDecoration: 'none' }}>
+            <div className="card" style={{ padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <div>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Settings</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Theme & layout</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <div className="divider" style={{ marginBottom: 20 }} />
+
+        {/* Location & Search */}
         <LocationBar savedLocation={savedLocation} onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }} />
         <ArtistSearch onAdd={addArtist} savedNames={savedNames} />
 
@@ -144,11 +209,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
             <div className="section-label" style={{ marginBottom: 8 }}>Time period</div>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {periods.map(([val, label]) => (
-                <button
-                  key={val}
-                  onClick={() => setPeriod(val)}
-                  className={period === val ? 'chip active' : 'chip'}
-                >{label}</button>
+                <button key={val} onClick={() => setPeriod(val)} className={period === val ? 'chip active' : 'chip'}>{label}</button>
               ))}
             </div>
           </div>
@@ -158,7 +219,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <span className="section-label">
-            {loading ? 'Loading…' : `${activeVisibleCount} ${activeVisibleCount === 1 ? 'artist' : 'artists'}`}
+            {loading ? 'Loading...' : `${activeVisibleCount} ${activeVisibleCount === 1 ? 'artist' : 'artists'}`}
           </span>
           {hiddenArtists.length > 0 && (
             <button onClick={() => setShowHidden(s => !s)} className="chip" style={{ fontSize: 10 }}>
@@ -187,10 +248,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
                   key={artist.name}
                   className="card"
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    gap: 12,
+                    display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 12,
                     opacity: isHidden ? 0.55 : 1,
                     animation: `fadeUp 0.4s ${i * 0.03}s cubic-bezier(0.16,1,0.3,1) both`,
                   }}
@@ -206,20 +264,6 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
                   </div>
                   {artist.source === 'manual' && (
                     <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>MANUAL</span>
-                  )}
-                  {!isHidden && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); toggleTrackedArtist(artist.name) }}
-                      title={settings.trackedArtists.includes(artist.name) ? 'Unfollow' : 'Follow & track'}
-                      aria-label={settings.trackedArtists.includes(artist.name) ? 'Unfollow' : 'Follow'}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: settings.trackedArtists.includes(artist.name) ? '#eab308' : 'var(--text-faint)',
-                        padding: '4px 2px', transition: 'color 0.15s',
-                      }}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill={settings.trackedArtists.includes(artist.name) ? '#eab308' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    </button>
                   )}
                   {isHidden ? (
                     <button
@@ -238,7 +282,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
                       }}
                       onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
                       onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
-                    >×</button>
+                    >&times;</button>
                   )}
                 </div>
               )
@@ -249,7 +293,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
         {location && activeVisibleCount > 0 && (
           <div style={{ position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 500, animation: 'fadeUp 0.4s 0.2s cubic-bezier(0.16,1,0.3,1) both' }}>
             <button onClick={goToShows} className="btn-primary" style={{ padding: '14px 28px', fontSize: 15, borderRadius: 'var(--r-lg)', boxShadow: '0 8px 28px var(--accent-glow)', whiteSpace: 'nowrap' }}>
-              Find Shows Near {location.city} →
+              Find Shows Near {location.city} &rarr;
             </button>
           </div>
         )}
@@ -290,6 +334,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
         </div>
       )}
 
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       <NavDock />
     </div>
   )
