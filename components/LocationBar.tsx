@@ -11,7 +11,7 @@ interface Props {
 
 const RECENT_KEY = 'showfinder_recent_locations'
 const MAX_RECENT = 5
-const ICON_OFFSET_LEFT = 36 // pin(14) + icon(~14) + gap(8)
+const ICON_OFFSET_LEFT = 38 // padding-left(14) + icon(16) + gap(8)
 
 function loadRecent(): string[] {
   if (typeof window === 'undefined') return []
@@ -332,7 +332,7 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
       )}
 
       <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingLeft: ICON_OFFSET_LEFT }}>
           <span className="section-label">{location ? 'Nearest hubs' : 'Popular hubs'}</span>
           {location && TOURING_HUBS.length > 5 && (
             <button onClick={() => setHubsExpanded(e => !e)} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}>
@@ -340,7 +340,7 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: ICON_OFFSET_LEFT }}>
           {visibleHubs.map(h => {
             const dist = location ? haversineDistanceMiles(location.latitude, location.longitude, h.latitude, h.longitude) : null
             return (
