@@ -103,6 +103,28 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     return Array.from(s).sort()
   }, [shows])
 
+  // Build "presales coming up" list — events whose public sale or any presale starts in the future (within 14d)
+  const upcomingPresales = useMemo(() => {
+    const now = Date.now()
+    const horizon = now + 14 * 24 * 60 * 60 * 1000
+    const out: { show: Show; saleAt: number; saleName: string }[] = []
+    for (const s of shows) {
+      const candidates: { at: number; name: string }[] = []
+      if (s.publicOnsaleAt) {
+        const at = new Date(s.publicOnsaleAt).getTime()
+        if (at > now && at <= horizon) candidates.push({ at, name: 'Public sale' })
+      }
+      for (const p of s.presales ?? []) {
+        const at = new Date(p.startDateTime).getTime()
+        if (at > now && at <= horizon) candidates.push({ at, name: p.name })
+      }
+      if (candidates.length === 0) continue
+      candidates.sort((a, b) => a.at - b.at)
+      out.push({ show: s, saleAt: candidates[0].at, saleName: candidates[0].name })
+    }
+    return out.sort((a, b) => a.saleAt - b.saleAt)
+  }, [shows])
+
   const filteredSorted = useMemo(() => {
     let list = shows
     if (sourceFilter !== 'all') list = list.filter(s => s.source === sourceFilter)
@@ -192,6 +214,8 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
             <button onClick={() => { setSort('date'); setSourceFilter('all'); setCityFilter('all') }} className="btn-ghost" style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 11 }}>Clear filters</button>
           )}
         </div>
+
+        {upcomingPresales.length > 0 && !loading && <PresaleCountdowns items={upcomingPresales} />}
 
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -283,6 +307,89 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
       </div>
 
       <NavDock />
+    </div>
+  )
+}
+
+function PresaleCountdowns({ items }: { items: { show: Show; saleAt: number; saleName: string }[] }) {
+  return (
+    <section style={{ marginBottom: 24, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span className="section-label">Presales & onsales</span>
+        <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>LIVE</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((it, i) => (
+          <PresaleCard key={`${it.show.id}-${it.saleName}-${it.saleAt}`} show={it.show} saleAt={it.saleAt} saleName={it.saleName} index={i} />
+        ))}
+      </div>
+      <div className="divider" style={{ marginTop: 24 }} />
+    </section>
+  )
+}
+
+function PresaleCard({ show, saleAt, saleName, index }: { show: Show; saleAt: number; saleName: string; index: number }) {
+  const [now, setNow] = useState<number>(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const ms = Math.max(0, saleAt - now)
+  const days = Math.floor(ms / (24 * 60 * 60 * 1000))
+  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
+  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))
+  const seconds = Math.floor((ms % (60 * 1000)) / 1000)
+  const started = ms === 0
+  const saleLocal = new Date(saleAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+  return (
+    <a
+      href={show.ticketUrl ?? show.bandsintownUrl ?? '#'}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="card"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: 14,
+        textDecoration: 'none', color: 'inherit',
+        animation: `fadeUp 0.4s ${index * 0.05}s cubic-bezier(0.16,1,0.3,1) both`,
+      }}
+    >
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+          <span style={{
+            fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, letterSpacing: 0.5,
+            color: started ? 'var(--bg)' : 'var(--accent)',
+            background: started ? 'var(--accent)' : 'var(--accent-soft)',
+            borderRadius: 'var(--r-xs)', padding: '2px 6px',
+          }}>{started ? 'ON SALE NOW' : saleName.toUpperCase()}</span>
+          <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>TICKETMASTER</span>
+        </div>
+        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, color: 'var(--text)', fontWeight: 600, marginBottom: 2, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{show.artistName}</p>
+        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
+          {show.venue?.name}{show.venue?.city ? ` · ${show.venue.city}` : ''} · {new Date(show.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+        </p>
+        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 10, color: 'var(--text-faint)', marginTop: 3 }}>
+          {started ? 'Tickets available now' : `Opens ${saleLocal}`}
+        </p>
+      </div>
+      {!started && (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+          {days > 0 && <CountUnit value={days} label="d" />}
+          <CountUnit value={hours} label="h" />
+          <CountUnit value={minutes} label="m" />
+          <CountUnit value={seconds} label="s" />
+        </div>
+      )}
+    </a>
+  )
+}
+
+function CountUnit({ value, label }: { value: number; label: string }) {
+  return (
+    <div style={{ textAlign: 'center', minWidth: 30 }}>
+      <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+        {String(value).padStart(2, '0')}
+      </div>
+      <div style={{ fontSize: 8, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>{label}</div>
     </div>
   )
 }

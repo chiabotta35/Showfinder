@@ -29,6 +29,8 @@ export interface Show {
   imageUrl?: string; status: 'onsale' | 'offsale' | 'cancelled' | 'postponed' | 'rescheduled' | 'unknown'
   priceRange?: { min: number; max: number; currency: string }
   isFestival: boolean; isTribute: boolean
+  publicOnsaleAt?: string
+  presales?: { name: string; startDateTime: string; endDateTime?: string }[]
 }
 export interface UserLocation { city: string; region: string; country: string; latitude: number; longitude: number }
 export interface TouringHub { id: string; name: string; latitude: number; longitude: number; region: string }
