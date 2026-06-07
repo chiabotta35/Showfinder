@@ -107,8 +107,8 @@ export function upsertUser(data: { lastfmUsername: string; lastfmSessionKey: str
   const db = getDb(); const now = Date.now()
   const existing = data.existingUserId ? getUserById(data.existingUserId) : (db.prepare('SELECT id FROM users WHERE lastfm_username = ?').get(data.lastfmUsername) as any)
   const id = existing?.id ?? crypto.randomUUID()
-  db.prepare(`INSERT INTO users (id, lastfm_username, lastfm_session_key, lastfm_display_name, scrobble_count, time_format, created_at, last_seen) VALUES (?, ?, ?, ?, ?, '12h', ?, ?) ON CONFLICT(id) DO UPDATE SET lastfm_username=excluded.lastfm_username, lastfm_session_key=excluded.lastfm_session_key, lastfm_display_name=excluded.lastfm_display_name, scrobble_count=excluded.scrobble_count, last_seen=excluded.last_seen`)
-    .run(id, data.lastfmUsername, data.lastfmSessionKey, data.lastfmDisplayName, data.scrobbleCount ?? null, now, now)
+  db.prepare(`INSERT INTO users (id, lastfm_username, lastfm_session_key, lastfm_display_name, display_name, scrobble_count, time_format, created_at, last_seen) VALUES (?, ?, ?, ?, ?, ?, '12h', ?, ?) ON CONFLICT(id) DO UPDATE SET lastfm_username=excluded.lastfm_username, lastfm_session_key=excluded.lastfm_session_key, lastfm_display_name=excluded.lastfm_display_name, display_name=COALESCE(NULLIF(excluded.display_name, ''), users.display_name), scrobble_count=excluded.scrobble_count, last_seen=excluded.last_seen`)
+    .run(id, data.lastfmUsername, data.lastfmSessionKey, data.lastfmDisplayName, data.lastfmDisplayName, data.scrobbleCount ?? null, now, now)
   return getUserById(id)!
 }
 export function updateUserPreferences(userId: string, prefs: { timeFormat?: '12h' | '24h' }) {

@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const isPopup = cookieHeader.split(';').some(c => c.trim() === 'sf_popup=1')
 
   if (!token) {
-    return isPopup ? popup('lastfm_auth_failed') : NextResponse.redirect(`${base}/?error=lastfm_denied`)
+    return isPopup ? popupResponse('lastfm_auth_failed') : NextResponse.redirect(`${base}/?error=lastfm_denied`)
   }
 
   try {
@@ -41,28 +41,39 @@ export async function GET(req: Request) {
     }
     await session.save()
 
-    // Clear the popup cookie
-    const response = isPopup ? popup('lastfm_auth_success') : NextResponse.redirect(`${base}/dashboard`)
-    if (isPopup) {
-      // For popup response we need to set cookie via headers
-    } else {
-      (response as NextResponse).cookies.set('sf_popup', '', { maxAge: 0 })
+    const response = isPopup ? popupResponse('lastfm_auth_success') : NextResponse.redirect(`${base}/dashboard`)
+    if (!isPopup) {
+      (response as NextResponse).cookies.set('sf_popup', '', { maxAge: 0, path: '/' })
     }
     return response
   } catch (e) {
     console.error('[lastfm/callback]', e)
-    return isPopup ? popup('lastfm_auth_failed') : NextResponse.redirect(`${base}/?error=lastfm_auth_failed`)
+    return isPopup ? popupResponse('lastfm_auth_failed') : NextResponse.redirect(`${base}/?error=lastfm_auth_failed`)
   }
 }
 
-function popup(msg: string) {
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
+function popupHtml(msg: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><script>
     (function() {
-      try { window.opener.postMessage('${msg}', '*'); } catch(e) {}
-      setTimeout(function() { window.close(); }, 100);
+      try {
+        if (window.opener) {
+          window.opener.postMessage('${msg}', window.location.origin);
+        }
+      } catch(e) {}
+      setTimeout(function() { window.close(); }, 250);
     })();
   <\/script><p style="font-family:sans-serif;color:#666;text-align:center;margin-top:40px">${msg === 'lastfm_auth_success' ? 'Connected! Closing...' : 'Auth failed. You can close this.'}</p></body></html>`
-  return new Response(html, { headers: { 'Content-Type': 'text/html' } })
+}
+
+function popupResponse(msg: string) {
+  // MUST be a NextResponse so cookies() store mutations from session.save()
+  // (and our own Set-Cookie below) are actually attached to the response.
+  const response = new NextResponse(popupHtml(msg), {
+    status: 200,
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+  })
+  response.cookies.set('sf_popup', '', { maxAge: 0, path: '/' })
+  return response
 }
 
 async function getLFSession(token: string): Promise<{ key: string; name: string }> {
