@@ -111,7 +111,7 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
           <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>We'll find shows within touring distance.</p>
         </div>
 
-        <div style={{ animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both' }}>
+        <div style={{ animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both', position: 'relative', zIndex: 50 }}>
           <LocationBar
             savedLocation={savedLocation}
             onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }}

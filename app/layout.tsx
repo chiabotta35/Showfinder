@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import AuthToast from '@/components/AuthToast'
+import ClientProviders from '@/components/ClientProviders'
 
 export const metadata: Metadata = {
   title: 'ShowFinder — Find concerts from your music',
@@ -11,8 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        {children}
-        <AuthToast />
+        <ClientProviders>
+          {children}
+        </ClientProviders>
       </body>
     </html>
   )

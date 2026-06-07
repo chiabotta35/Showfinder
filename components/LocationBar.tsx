@@ -251,10 +251,10 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
           border: '1px solid var(--border)',
           borderRadius: 'var(--r-md)',
           overflow: 'hidden',
-          zIndex: 100,
+          zIndex: 1000,
           maxHeight: 340,
           overflowY: 'auto',
-          boxShadow: 'var(--shadow-md)',
+          boxShadow: 'var(--shadow-lg)',
         }}>
           {results.length > 0 && (
             <>

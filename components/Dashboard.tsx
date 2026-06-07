@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import NavDock from './NavDock'
 import LocationBar from './LocationBar'
 import ArtistSearch from './ArtistSearch'
+import { useSettings } from './SettingsContext'
 import type { ScoredArtist, UserLocation, TouringHub } from '@/types'
 
 interface Props {
@@ -22,6 +23,7 @@ function saveHidden(s: Set<string>) {
 }
 
 export default function Dashboard({ lastfmUser, savedLocation }: Props) {
+  const { settings, toggleTrackedArtist } = useSettings()
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<string>('6month')
@@ -204,6 +206,20 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
                   </div>
                   {artist.source === 'manual' && (
                     <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>MANUAL</span>
+                  )}
+                  {!isHidden && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); toggleTrackedArtist(artist.name) }}
+                      title={settings.trackedArtists.includes(artist.name) ? 'Unfollow' : 'Follow & track'}
+                      aria-label={settings.trackedArtists.includes(artist.name) ? 'Unfollow' : 'Follow'}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: settings.trackedArtists.includes(artist.name) ? '#eab308' : 'var(--text-faint)',
+                        padding: '4px 2px', transition: 'color 0.15s',
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill={settings.trackedArtists.includes(artist.name) ? '#eab308' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </button>
                   )}
                   {isHidden ? (
                     <button
