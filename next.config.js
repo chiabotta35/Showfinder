@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   ...(process.env.NODE_ENV === 'development' && {
-    allowedDevOrigins: ['192.168.0.0/16', '10.0.0.0/8', '172.16.0.0/12'],
+    // Next 15 doesn't accept CIDR notation. Add specific hostnames/IPs.
+    // Override with ALLOWED_DEV_ORIGINS env var (comma-separated) for extras.
+    allowedDevOrigins: [
+      'localhost',
+      '127.0.0.1',
+      '192.168.1.76',
+      ...(process.env.ALLOWED_DEV_ORIGINS?.split(',').map(s => s.trim()).filter(Boolean) ?? []),
+    ],
   }),
   async headers() {
     return [{
