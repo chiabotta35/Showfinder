@@ -23,7 +23,6 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
     if (savedLocation) {
       const loc: UserLocation = { city: savedLocation.city, region: savedLocation.region, country: 'US', latitude: savedLocation.lat, longitude: savedLocation.lng }
       setLocation(loc)
-      fetch('/api/location', { method: 'GET' }).then().catch(() => {})
     }
   }, [])
 
@@ -34,8 +33,11 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
 
   function goToShows(loc: UserLocation, h: TouringHub[]) {
     const params = new URLSearchParams({ lat: String(loc.latitude), lng: String(loc.longitude), city: loc.city, region: loc.region, country: loc.country, hubs: h.map(x => x.id).join(',') })
-    if (artists.length) params.set('artists', artists.map(a => a.name).join(','))
-    router.push(`/shows?${params.toString()}`)
+    const url = `/shows?${params.toString()}`
+    if (artists.length) {
+      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
+    }
+    router.push(url)
   }
 
   function gotoArtists() {

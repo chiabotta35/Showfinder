@@ -95,8 +95,10 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   function goToShows() {
     if (!location) return
     const params = new URLSearchParams({ lat: String(location.latitude), lng: String(location.longitude), city: location.city, region: location.region, country: location.country, hubs: hubs.map(h => h.id).join(',') })
-    if (artists.length) params.set('artists', artists.map(a => a.name).join(','))
     const url = `/shows?${params}`
+    if (artists.length) {
+      try { localStorage.setItem('lastShowsArtists', JSON.stringify(artists.map(a => a.name))) } catch {}
+    }
     localStorage.setItem('lastShowsUrl', url)
     window.location.href = url
   }

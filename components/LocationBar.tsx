@@ -62,18 +62,22 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
 
   useEffect(() => {
     setRecent(loadRecent())
-    if (savedLocation) {
+    if (savedLocation && isFinite(savedLocation.lat) && isFinite(savedLocation.lng) && (savedLocation.lat !== 0 || savedLocation.lng !== 0)) {
       const loc: UserLocation = { city: savedLocation.city, region: savedLocation.region, country: 'US', latitude: savedLocation.lat, longitude: savedLocation.lng }
       setLocation(loc); setQuery(`${loc.city}, ${loc.region}`)
-      // Load hubs silently on mount, but don't fire onLocationChange —
-      // this is a read, not a user action.
+      // Load hubs AND notify the parent. This is a read of the saved location,
+      // not a user action — parents should use it to set their own state, not navigate.
       ;(async () => {
         try {
           const res = await fetch(`/api/location?lat=${loc.latitude}&lng=${loc.longitude}`)
-          if (!res.ok) return
+          if (!res.ok) { onLocationChange(loc, []); return }
           const data = await res.json()
-          setHubs(data.suggestedHubs ?? [])
-        } catch {}
+          const nearbyHubs: TouringHub[] = data.suggestedHubs ?? []
+          setHubs(nearbyHubs)
+          onLocationChange(loc, nearbyHubs)
+        } catch {
+          onLocationChange(loc, [])
+        }
       })()
     }
   }, [])

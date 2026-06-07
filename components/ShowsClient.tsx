@@ -36,7 +36,15 @@ function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: 
 export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
   const [location, setLocation] = useState<UserLocation>(initialLocation)
   const [hubs, setHubs] = useState<TouringHub[]>(initialHubs)
-  const [artistNames, setArtistNames] = useState<string[]>(initialArtistNames)
+  const [artistNames, setArtistNames] = useState<string[]>(() => {
+    if (initialArtistNames.length) return initialArtistNames
+    if (typeof window === 'undefined') return []
+    try {
+      const stored = localStorage.getItem('lastShowsArtists')
+      if (stored) return JSON.parse(stored) as string[]
+    } catch {}
+    return []
+  })
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
