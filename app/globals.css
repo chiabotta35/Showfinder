@@ -95,6 +95,12 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
   color: var(--text);
   transition: background .35s ease;
 }
+.site[data-nav="icons"] { grid-template-columns: 80px 1fr; }
+.site[data-nav="icons"] .brand-name { display:none; }
+.site[data-nav="icons"] .nav-item { justify-content:center; padding:13px; }
+.site[data-nav="icons"] .nav-label { display:none; }
+.site[data-nav="floating"] .sidebar { background:transparent; border-right:none; padding:16px 0 16px 16px; }
+.site[data-nav="floating"] .sitenav { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:0 18px 50px -20px rgba(0,0,0,.6); }
 
 /* ---- Sidebar ---- */
 .sidebar {
@@ -196,6 +202,12 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 .loc-opt { display:flex; align-items:center; gap:9px; padding:10px 11px; font-size:14px; color:var(--text); border-radius:var(--radius-sm); width:100%; text-align:left; cursor:pointer; }
 .loc-opt:hover { background:var(--surface2); }
 .loc-none { padding:14px 11px; font-size:13px; color:var(--faint); }
+.loc-group { display:flex; flex-direction:column; gap:2px; }
+
+/* ====================== CHIPS ====================== */
+.chip { padding:7px 13px; font-size:12.5px; font-weight:600; color:var(--dim); background:var(--surface); border:1px solid var(--border); border-radius:999px; white-space:nowrap; transition:.15s; cursor:pointer; }
+.chip:hover { color:var(--text); border-color:var(--accent-line); }
+.section-label { font-size:12px; font-weight:700; color:var(--faint); letter-spacing:.3px; text-transform:uppercase; }
 
 /* ====================== STATS / ACTIONS ====================== */
 .stat-row { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
@@ -430,6 +442,14 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 
 /* ====================== FLASH ====================== */
 .flash { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); z-index:280; display:flex; align-items:center; gap:8px; padding:12px 20px; max-width:80%; background:var(--surface); border:1px solid var(--border); border-radius:999px; font-size:13.5px; font-weight:600; color:var(--text); box-shadow:0 14px 34px -10px rgba(0,0,0,.6); animation:flashin .25s ease; white-space:nowrap; }
+
+/* ====================== CARD EMPHASIS ====================== */
+.site[data-card="flat"] .show-card, .site[data-card="flat"] .stat-card, .site[data-card="flat"] .action-card,
+.site[data-card="flat"] .tracked-row, .site[data-card="flat"] .rec-card, .site[data-card="flat"] .drift-card,
+.site[data-card="flat"] .info-tile, .site[data-card="flat"] .artist-grid-card { border-color:transparent; }
+.site[data-card="elevated"] .show-card, .site[data-card="elevated"] .action-card, .site[data-card="elevated"] .tracked-row,
+.site[data-card="elevated"] .rec-card, .site[data-card="elevated"] .presale-banner, .site[data-card="elevated"] .stat-card,
+.site[data-card="elevated"] .profile-card { box-shadow:0 6px 20px -10px rgba(0,0,0,.5); border-color:transparent; }
 
 /* ====================== SKELETON ====================== */
 .skeleton { background:linear-gradient(90deg, var(--surface) 0%, var(--surface2) 50%, var(--surface) 100%); background-size:200% 100%; animation:shimmer 1.4s linear infinite; border-radius:var(--radius); }

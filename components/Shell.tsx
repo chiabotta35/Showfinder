@@ -1,8 +1,8 @@
 'use client'
-import { useState, useEffect, useRef, createContext, useContext } from 'react'
-import { usePathname } from 'next/navigation'
+import { useState, useEffect, useRef, createContext, useCallback } from 'react'
 import { useSettings } from './SettingsContext'
 import SettingsPanel from './SettingsPanel'
+import LocationBar from './LocationBar'
 import type { UserLocation, TouringHub } from '@/types'
 
 interface ShellContextValue {
@@ -12,17 +12,23 @@ interface ShellContextValue {
   openSettings: () => void
   showFlash: (msg: string) => void
   flashMsg: string | null
+  userName: string
 }
-export const ShellContext = createContext<ShellContextValue>({ location: null, hubs: [], setLocation: () => {}, openSettings: () => {}, showFlash: () => {}, flashMsg: null })
+export const ShellContext = createContext<ShellContextValue>({ location: null, hubs: [], setLocation: () => {}, openSettings: () => {}, showFlash: () => {}, flashMsg: null, userName: '' })
 
 const NAV = [
-  { id: 'home', href: '/dashboard', label: 'Home', color: 'var(--sec-home)' },
-  { id: 'artists', href: '/artists', label: 'Artists', color: 'var(--sec-artists)' },
-  { id: 'shows', href: '/shows', label: 'Shows', color: 'var(--sec-shows)' },
-  { id: 'tracked', href: '/tracked', label: 'Tracked', color: 'var(--sec-tracked)' },
-  { id: 'discover', href: '/discover', label: 'Discover', color: 'var(--sec-discover)' },
-  { id: 'account', href: '/account', label: 'Account', color: 'var(--sec-account)' },
+  { id: 'home', href: '/dashboard', label: 'Home', color: '#2dd4bf' },
+  { id: 'artists', href: '/artists', label: 'Artists', color: '#4aa8ff' },
+  { id: 'shows', href: '/shows', label: 'Shows', color: '#ff9a3c' },
+  { id: 'tracked', href: '/tracked', label: 'Tracked', color: '#facc15' },
+  { id: 'discover', href: '/discover', label: 'Discover', color: '#a78bfa' },
+  { id: 'account', href: '/account', label: 'Account', color: '#9aa6ab' },
 ]
+
+const SECTION_COLORS: Record<string, string> = {
+  home: '#2dd4bf', artists: '#4aa8ff', shows: '#ff9a3c',
+  tracked: '#facc15', discover: '#a78bfa', account: '#9aa6ab',
+}
 
 const ICONS: Record<string, string> = {
   home: 'M3 11.5 12 4l9 7.5M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9',
@@ -38,6 +44,7 @@ const ICONS: Record<string, string> = {
   chevDown: 'M6 9l6 6 6-6',
   close: 'M6 6l12 12M18 6 6 18',
   spark: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8Z',
+  plus: 'M12 5v14M5 12h14',
 }
 
 function NavIcon({ name, color, active }: { name: string; color: string; active: boolean }) {
@@ -75,8 +82,8 @@ function Sidebar({ route, onNav, tabs, onSettings }: { route: string; onNav: (hr
           const active = route === item.id
           return (
             <button key={item.id} className={`nav-item ${active ? 'on' : ''}`} onClick={() => onNav(item.href)}>
-              <span className="nav-accent" style={{ background: item.color }} />
-              <NavIcon name={item.id} color={item.color} active={active} />
+              <span className="nav-accent" style={{ background: SECTION_COLORS[item.id] }} />
+              <NavIcon name={item.id} color={SECTION_COLORS[item.id]} active={active} />
               <span className="nav-label" style={{ color: active ? 'var(--text)' : 'var(--dim)' }}>{item.label}</span>
             </button>
           )
@@ -91,13 +98,63 @@ function Sidebar({ route, onNav, tabs, onSettings }: { route: string; onNav: (hr
   )
 }
 
+function TopBarSearch({ onAdd }: { onAdd: (name: string) => void }) {
+  const [v, setV] = useState('')
+  const submit = () => { const n = v.trim(); if (!n) return; onAdd(n); setV('') }
+  return (
+    <div className="artist-search">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4" /></svg>
+      <input value={v} onChange={e => setV(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="Add an artist manually…" />
+      <button className="add-btn" onClick={submit} disabled={!v.trim()} style={{ background: v.trim() ? 'var(--accent)' : 'var(--surface2)', color: v.trim() ? 'var(--accent-ink)' : 'var(--faint)' }}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+      </button>
+    </div>
+  )
+}
+
+function TopBarAvatar({ name, onClick }: { name: string; onClick: () => void }) {
+  const initials = name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  let hash = 0
+  for (const c of name) hash = ((hash * 31) + c.charCodeAt(0)) >>> 0
+  const hue = hash % 360
+  return (
+    <button className="topbar-avatar" onClick={onClick} title="Account" style={{ width: 34, height: 34, borderRadius: 10, background: `linear-gradient(135deg, hsl(${hue}, 40%, 35%), hsl(${(hue + 40) % 360}, 35%, 28%))`, display: 'grid', placeItems: 'center', color: '#fff', fontSize: 12, fontWeight: 700, border: 'none', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.08)' }}>
+      {initials}
+    </button>
+  )
+}
+
+function TopBar({ location, onLocationChange, onAddArtist, onFindShows, onNav, userName }: {
+  location: UserLocation | null; onLocationChange: (city: string) => void; onAddArtist: (name: string) => void; onFindShows: () => void; onNav: (href: string) => void; userName: string
+}) {
+  return (
+    <header className="topbar">
+      <div className="topbar-loc">
+        <LocationBar savedLocation={location ? { city: location.city, region: location.region, lat: location.latitude, lng: location.longitude } : null} onLocationChange={(loc) => onLocationChange(loc.city)} />
+      </div>
+      <div className="topbar-search">
+        <TopBarSearch onAdd={onAddArtist} />
+      </div>
+      <div className="topbar-actions">
+        <button className="find-btn" onClick={onFindShows} style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
+          <span>Find Shows</span>
+        </button>
+        <TopBarAvatar name={userName} onClick={() => onNav('/account')} />
+      </div>
+    </header>
+  )
+}
+
 interface Props {
   route: string
   children: React.ReactNode
   savedLocation?: { city: string; region: string; lat: number; lng: number } | null
+  userName?: string
+  onAddArtist?: (name: string) => void
 }
 
-export default function Shell({ route, children, savedLocation }: Props) {
+export default function Shell({ route, children, savedLocation, userName = 'User', onAddArtist }: Props) {
   const { settings } = useSettings()
   const [showSettings, setShowSettings] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
@@ -111,15 +168,25 @@ export default function Shell({ route, children, savedLocation }: Props) {
     }
   }, [savedLocation])
 
-  function handleNav(href: string) { window.location.href = href }
+  const handleNav = useCallback((href: string) => { window.location.href = href }, [])
 
-  function showFlash(msg: string) {
+  const showFlash = useCallback((msg: string) => {
     setFlash(msg)
     if (flashTimer.current) clearTimeout(flashTimer.current)
     flashTimer.current = setTimeout(() => setFlash(f => f === msg ? null : f), 1800)
-  }
+  }, [])
 
-  const ctx: ShellContextValue = { location, hubs, setLocation: (loc, h) => { setLocation(loc); setHubs(h) }, openSettings: () => setShowSettings(true), showFlash, flashMsg: flash }
+  const findShows = useCallback(() => {
+    handleNav('/shows')
+    showFlash('Searching near ' + (location?.city?.split(',')[0] || 'you') + '…')
+  }, [handleNav, showFlash, location])
+
+  const handleAddArtist = useCallback((name: string) => {
+    if (onAddArtist) onAddArtist(name)
+    showFlash('Added ' + name)
+  }, [onAddArtist, showFlash])
+
+  const ctx: ShellContextValue = { location, hubs, setLocation: (loc, h) => { setLocation(loc); setHubs(h) }, openSettings: () => setShowSettings(true), showFlash, flashMsg: flash, userName }
 
   return (
     <ShellContext.Provider value={ctx}>
@@ -128,6 +195,16 @@ export default function Shell({ route, children, savedLocation }: Props) {
           <Sidebar route={route} onNav={handleNav} tabs={settings.navdockTabs} onSettings={() => setShowSettings(true)} />
         </aside>
         <div className="main">
+          <TopBar
+            location={location}
+            onLocationChange={(city) => {
+              if (location) { setLocation({ ...location, city }); }
+            }}
+            onAddArtist={handleAddArtist}
+            onFindShows={findShows}
+            onNav={handleNav}
+            userName={userName}
+          />
           <div className="content">
             {children}
           </div>

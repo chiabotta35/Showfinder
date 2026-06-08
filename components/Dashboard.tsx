@@ -1,8 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Shell from './Shell'
-import LocationBar from './LocationBar'
-import ArtistSearch from './ArtistSearch'
 import { useSettings } from './SettingsContext'
 import type { ScoredArtist, UserLocation, TouringHub } from '@/types'
 
@@ -156,17 +154,15 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   ]
 
   return (
-    <Shell route="home" savedLocation={savedLocation}>
+    <Shell route="home" savedLocation={savedLocation} userName={lastfmUser?.displayName || 'User'} onAddArtist={addArtist}>
       <div className="page home">
         <header className="page-head">
           <div>
-            <div className="greeting">{getGreeting()}</div>
-            <h1 className="page-title">ShowFinder</h1>
+            <div className="greeting">{getGreeting()}, {lastfmUser?.displayName?.split(' ')[0] || 'there'}</div>
+            <h1 className="page-title">Dashboard</h1>
           </div>
           <div className="head-status"><span className="status-dot" style={{ background: '#3ddc91' }} />Synced</div>
         </header>
-
-        <LocationBar savedLocation={savedLocation} onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }} />
 
         {settings.dashboardSections.quickStats && (
           <div className="stat-row">
@@ -188,17 +184,15 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
               <div className="ac-text"><b>Discover</b><span>Recs &amp; drifted artists</span></div>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
             </button>
-            <button className="action-card" onClick={() => window.location.href = '/tracked'}>
-              <div className="ac-ico" style={{ background: 'var(--sec-tracked)1f', color: 'var(--sec-tracked)' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--sec-tracked)" stroke="var(--sec-tracked)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+            <button className="action-card" onClick={() => window.location.href = '/account'}>
+              <div className="ac-ico" style={{ background: 'var(--surface2)', color: 'var(--dim)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM4 12l-1.2-.7.9-2.2 1.4.2a6.8 6.8 0 0 1 1.1-1.1L6 6.8l2.2-.9L9 7.1a6.8 6.8 0 0 1 1.5 0l.8-1.2 2.2.9-.2 1.4a6.8 6.8 0 0 1 1.1 1.1l1.4-.2.9 2.2L17 12l.7.7-.9 2.2-1.4-.2a6.8 6.8 0 0 1-1.1 1.1l.2 1.4-2.2.9-.7-1.2a6.8 6.8 0 0 1-1.5 0l-.8 1.2-2.2-.9.2-1.4a6.8 6.8 0 0 1-1.1-1.1l-1.4.2-.9-2.2Z" /></svg>
               </div>
-              <div className="ac-text"><b>Tracked</b><span>{trackedCount} starred shows</span></div>
+              <div className="ac-text"><b>Settings</b><span>Theme, layout &amp; tabs</span></div>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
             </button>
           </div>
         )}
-
-        <ArtistSearch onAdd={addArtist} savedNames={savedNames} />
 
         {settings.dashboardSections.topArtists && (
           <section className="block">
@@ -244,12 +238,6 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
           </section>
         )}
 
-        <div className="fab-wrap">
-          <button className="fab" onClick={goToShows} style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
-            <span>Find Shows</span>
-          </button>
-        </div>
       </div>
 
       {confirmRemove && (
