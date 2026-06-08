@@ -1,11 +1,12 @@
 'use client'
 import { useRouter } from 'next/navigation'
-import NavDock from './NavDock'
+import Shell from './Shell'
 
 export default function LandingPage() {
   const router = useRouter()
   return (
-    <div className="page-header" style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, paddingBottom: 120, position: 'relative', overflow: 'hidden' }}>
+    <Shell route="home">
+      <div className="page-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, overflow: 'hidden' }}>
       <div style={{ position: 'absolute', top: '-30%', left: '50%', transform: 'translateX(-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, var(--accent) 0%, transparent 70%)', opacity: 0.08, pointerEvents: 'none', filter: 'blur(80px)' }} />
 
       <div style={{ maxWidth: 680, textAlign: 'center', position: 'relative', zIndex: 1 }}>
@@ -40,7 +41,7 @@ export default function LandingPage() {
       </div>
 
       <style>{`@media (max-width: 640px) { .page-header > div:last-of-type { grid-template-columns: 1fr !important; } }`}</style>
-      <NavDock />
-    </div>
+      </div>
+    </Shell>
   )
 }

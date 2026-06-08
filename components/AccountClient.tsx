@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import NavDock from './NavDock'
+import Shell from './Shell'
 import { useSettings } from './SettingsContext'
 
 interface Props {
@@ -42,8 +42,8 @@ export default function AccountClient({ user, lastfmConnected }: Props) {
   const memberSince = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
-      <div className="page">
+    <Shell route="account">
+      <div className="page account">
         <header className="page-head">
           <h1 className="page-title">Account</h1>
         </header>
@@ -104,7 +104,6 @@ export default function AccountClient({ user, lastfmConnected }: Props) {
           <button type="submit" className="signout-btn">Sign out</button>
         </form>
       </div>
-      <NavDock />
-    </div>
+    </Shell>
   )
 }

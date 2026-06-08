@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
-import NavDock from './NavDock'
+import Shell from './Shell'
 import { useSettings } from './SettingsContext'
 import type { Show, UserLocation, ScoredArtist, EventSource, TouringHub } from '@/types'
 
@@ -196,8 +196,8 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const presales = shows.filter(s => s.publicOnsaleAt || (s.presales && s.presales.length > 0))
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
-      <div className="page">
+    <Shell route="shows">
+      <div className="page shows">
         <header className="page-head">
           <h1 className="page-title">Shows</h1>
           <div className="head-status"><StatusDot source={dataSource} ts={lastFetchAt} />Updated</div>
@@ -324,7 +324,6 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
           ))
         )}
       </div>
-      <NavDock />
-    </div>
+    </Shell>
   )
 }

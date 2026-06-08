@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import NavDock from './NavDock'
+import Shell from './Shell'
 import LocationBar from './LocationBar'
 import ArtistSearch from './ArtistSearch'
 import { useSettings } from './SettingsContext'
@@ -156,8 +156,8 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   ]
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
-      <div className="page">
+    <Shell route="home" savedLocation={savedLocation}>
+      <div className="page home">
         <header className="page-head">
           <div>
             <div className="greeting">{getGreeting()}</div>
@@ -274,7 +274,6 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
         </div>
       )}
 
-      <NavDock />
-    </div>
+    </Shell>
   )
 }

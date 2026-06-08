@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import NavDock from './NavDock'
+import Shell from './Shell'
 import LocationBar from './LocationBar'
 import ArtistSearch from './ArtistSearch'
 import type { UserLocation, TouringHub, ScoredArtist } from '@/types'
@@ -80,22 +80,21 @@ export default function DiscoverClient({ isLoggedIn, savedLocation, lastfmConnec
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100 }}>
-        <div className="page">
+      <Shell route="discover">
+        <div className="page discover">
           <div className="skeleton" style={{ height: 32, width: 160, marginBottom: 12 }} />
           <div className="skeleton" style={{ height: 16, width: 200, marginBottom: 32 }} />
           <div style={{ display: 'flex', gap: 6, marginBottom: 24 }}>
             {Array.from({ length: 3 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 30, width: 110, animationDelay: `${i * 0.05}s` }} />)}
           </div>
         </div>
-        <NavDock />
-      </div>
+      </Shell>
     )
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
-      <div className="page">
+    <Shell route="discover">
+      <div className="page discover">
         <header className="page-head">
           <h1 className="page-title">Discover</h1>
         </header>
@@ -216,7 +215,6 @@ export default function DiscoverClient({ isLoggedIn, savedLocation, lastfmConnec
           </div>
         )}
       </div>
-      <NavDock />
-    </div>
+    </Shell>
   )
 }

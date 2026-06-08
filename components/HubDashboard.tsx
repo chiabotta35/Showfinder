@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import NavDock from './NavDock'
+import Shell from './Shell'
 import LocationBar from './LocationBar'
 import type { UserLocation, TouringHub, ScoredArtist } from '@/types'
 import { TOURING_HUBS, haversineDistanceMiles, getNearestHubs } from '@/lib/location'
@@ -64,8 +64,8 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
   const greeting = lastfmUser?.displayName ? `Welcome back, ${lastfmUser.displayName.split(' ')[0]}` : 'Find live shows near you'
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 20px 20px' }}>
+    <Shell route="home">
+      <div className="page home" style={{ maxWidth: 720, margin: '0 auto' }}>
 
         <header style={{ marginBottom: 40, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
           <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 11, color: 'var(--home-primary)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>ShowFinder</p>
@@ -159,7 +159,6 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
         )}
 
       </div>
-      <NavDock />
-    </div>
+    </Shell>
   )
 }

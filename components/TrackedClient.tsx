@@ -1,7 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { useSettings, type TrackedShow } from '@/components/SettingsContext'
-import NavDock from './NavDock'
+import Shell from './Shell'
 
 const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 const moNm = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -46,8 +46,8 @@ export default function TrackedClient() {
   const today = new Date()
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
-      <div className="page">
+    <Shell route="tracked">
+      <div className="page tracked">
         <header className="page-head">
           <h1 className="page-title">Tracked</h1>
           <span className="count-pill" style={{ color: 'var(--sec-tracked)', borderColor: 'var(--sec-tracked)55' }}>{items.length}</span>
@@ -130,7 +130,6 @@ export default function TrackedClient() {
           </div>
         )}
       </div>
-      <NavDock />
-    </div>
+    </Shell>
   )
 }
