@@ -7,6 +7,7 @@ import { CITIES, cityToLocation } from '@/lib/cities'
 interface Props {
   savedLocation?: { city: string; region: string; lat: number; lng: number } | null
   onLocationChange: (loc: UserLocation, hubs: TouringHub[]) => void
+  compact?: boolean
 }
 
 const RECENT_KEY = 'showfinder_recent_locations'
@@ -42,7 +43,7 @@ function fuzzyMatchLocal(query: string): Match | null {
   return null
 }
 
-export default function LocationBar({ savedLocation, onLocationChange }: Props) {
+export default function LocationBar({ savedLocation, onLocationChange, compact }: Props) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Match[]>([])
   const [location, setLocation] = useState<UserLocation | null>(null)
@@ -183,7 +184,7 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
   const visibleHubs = hubsExpanded ? TOURING_HUBS : hubList
 
   return (
-    <div ref={wrapRef} className="locationbar" style={{ marginBottom: 16 }}>
+    <div ref={wrapRef} className="locationbar" style={compact ? undefined : { marginBottom: 16 }}>
       <button className="loc-trigger" onClick={() => setOpen(o => !o)}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7z" /><circle cx="12" cy="9" r="2.5" />
@@ -265,26 +266,28 @@ export default function LocationBar({ savedLocation, onLocationChange }: Props) 
 
       {geoError && <p style={{ fontSize: 11, color: 'var(--red)', fontFamily: 'var(--font-body), sans-serif', marginTop: 6 }}>{geoError}</p>}
 
-      <div style={{ marginTop: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-          <span className="section-label">{location ? 'Nearest hubs' : 'Popular hubs'}</span>
-          {location && TOURING_HUBS.length > 5 && (
-            <button onClick={() => setHubsExpanded(e => !e)} style={{ fontSize: 11, color: 'var(--dim)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body), sans-serif' }}>
-              {hubsExpanded ? 'Less' : `All ${TOURING_HUBS.length}`}
-            </button>
-          )}
-        </div>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {visibleHubs.map(h => {
-            const dist = location ? haversineDistanceMiles(location.latitude, location.longitude, h.latitude, h.longitude) : null
-            return (
-              <button key={h.id} className="chip" onClick={() => selectLocation({ displayName: h.name, latitude: h.latitude, longitude: h.longitude, region: h.region })}>
-                {h.name}{dist != null && <span style={{ opacity: 0.6 }}> · {Math.round(dist)}mi</span>}
+      {!compact && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span className="section-label">{location ? 'Nearest hubs' : 'Popular hubs'}</span>
+            {location && TOURING_HUBS.length > 5 && (
+              <button onClick={() => setHubsExpanded(e => !e)} style={{ fontSize: 11, color: 'var(--dim)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body), sans-serif' }}>
+                {hubsExpanded ? 'Less' : `All ${TOURING_HUBS.length}`}
               </button>
-            )
-          })}
+            )}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {visibleHubs.map(h => {
+              const dist = location ? haversineDistanceMiles(location.latitude, location.longitude, h.latitude, h.longitude) : null
+              return (
+                <button key={h.id} className="chip" onClick={() => selectLocation({ displayName: h.name, latitude: h.latitude, longitude: h.longitude, region: h.region })}>
+                  {h.name}{dist != null && <span style={{ opacity: 0.6 }}> · {Math.round(dist)}mi</span>}
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

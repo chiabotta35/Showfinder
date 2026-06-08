@@ -130,7 +130,7 @@ function TopBar({ location, onLocationChange, onAddArtist, onFindShows, onNav, u
   return (
     <header className="topbar">
       <div className="topbar-loc">
-        <LocationBar savedLocation={location ? { city: location.city, region: location.region, lat: location.latitude, lng: location.longitude } : null} onLocationChange={(loc) => onLocationChange(loc.city)} />
+        <LocationBar savedLocation={location ? { city: location.city, region: location.region, lat: location.latitude, lng: location.longitude } : null} onLocationChange={(loc) => onLocationChange(loc.city)} compact />
       </div>
       <div className="topbar-search">
         <TopBarSearch onAdd={onAddArtist} />

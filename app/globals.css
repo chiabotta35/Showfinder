@@ -145,7 +145,7 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
   background:color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter:blur(14px) saturate(1.3);
   -webkit-backdrop-filter:blur(14px) saturate(1.3);
-  position:sticky; top:0; z-index:100;
+  position:relative; z-index:100;
 }
 .topbar-loc { flex:none; }
 .topbar-search { flex:1; max-width:440px; }
@@ -390,6 +390,22 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 .sb-row b { font-weight:600; white-space:nowrap; text-align:right; }
 .signout-btn { align-self:flex-start; padding:13px 24px; font-size:14px; font-weight:700; color:#ff6f6f; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); transition:.15s; cursor:pointer; }
 .signout-btn:hover { border-color:#ff6f6f55; }
+
+/* ====================== BUTTONS / PANELS ====================== */
+.btn-primary {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:11px 22px; border-radius:var(--radius-sm);
+  background:var(--accent); color:var(--accent-ink);
+  font-size:14px; font-weight:700; border:none; cursor:pointer;
+  transition:transform .12s;
+}
+.btn-primary:active { transform:scale(.97); }
+.btn-primary:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+.panel {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  box-shadow:0 40px 100px -20px rgba(0,0,0,.7);
+}
 
 /* ====================== DISCOVER ====================== */
 .disc-tabs, .sp-tabs { display:flex; gap:8px; }
