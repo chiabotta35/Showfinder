@@ -2,15 +2,28 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import NavDock from './NavDock'
+import { useSettings } from './SettingsContext'
 
 interface Props {
   user: { displayName: string; lastfmUsername: string; createdAt: string; city: string; region: string }
   lastfmConnected: boolean
 }
 
+function Avatar({ name, size = 48 }: { name: string; size?: number }) {
+  const initials = name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const hue = [...name].reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0)
+  const bg = `hsl(${Math.abs(hue) % 360}, 50%, 35%)`
+  return (
+    <div style={{ width: size, height: size, borderRadius: size * 0.3, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: size * 0.38, flexShrink: 0 }}>
+      {initials}
+    </div>
+  )
+}
+
 export default function AccountClient({ user, lastfmConnected }: Props) {
   const router = useRouter()
   const [connecting, setConnecting] = useState(false)
+  const { settings } = useSettings()
 
   async function disconnect() {
     if (!confirm('Disconnect Last.fm? Your saved artists will remain.')) return
@@ -29,47 +42,67 @@ export default function AccountClient({ user, lastfmConnected }: Props) {
   const memberSince = new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '48px 20px 20px' }}>
-        <div style={{ marginBottom: 32, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Account</h1>
-          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>Manage your profile and connections.</p>
-        </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
+      <div className="page">
+        <header className="page-head">
+          <h1 className="page-title">Account</h1>
+        </header>
 
-        <div className="card" style={{ padding: 20, marginBottom: 12, animation: 'fadeUp 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <div className="section-label" style={{ marginBottom: 12 }}>Profile</div>
-          <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 4 }}>{user.displayName}</p>
-          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)' }}>@{user.lastfmUsername}</p>
-          {user.city && (
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>{user.city}{user.region ? `, ${user.region}` : ''}</p>
-          )}
-          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-faint)', marginTop: 8 }}>Member since {memberSince}</p>
-        </div>
-
-        <div className="card" style={{ padding: 20, animation: 'fadeUp 0.6s 0.2s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <div className="section-label" style={{ marginBottom: 12 }}>Connections</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 14, color: 'var(--text)', fontWeight: 500 }}>Last.fm</p>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: lastfmConnected ? 'var(--accent)' : 'var(--text-dim)', marginTop: 2 }}>
-                {lastfmConnected ? 'Connected' : 'Not connected'}
-              </p>
-            </div>
-            {lastfmConnected ? (
-              <button onClick={disconnect} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Disconnect</button>
-            ) : (
-              <button onClick={connectLastfm} disabled={connecting} className="btn-primary" style={{ padding: '8px 14px', fontSize: 12 }}>
-                {connecting ? '…' : 'Connect'}
-              </button>
-            )}
+        <div className="profile-card">
+          <Avatar name={user.displayName} size={60} />
+          <div className="pc-info">
+            <b>{user.displayName}</b>
+            <span>@{user.lastfmUsername}</span>
           </div>
         </div>
 
-        <div style={{ marginTop: 24, animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <form action="/api/auth/logout" method="POST">
-            <button type="submit" className="btn-ghost" style={{ width: '100%', padding: '12px', fontSize: 13 }}>Sign out</button>
-          </form>
+        <div className="connection-card">
+          <div className="cc-left">
+            <div className="lastfm-mark" style={{ background: '#b90000' }}>fm</div>
+            <div className="cc-text">
+              <b>Last.fm</b>
+              <span>{lastfmConnected ? `@${user.lastfmUsername}` : 'Not connected'}</span>
+            </div>
+          </div>
+          {lastfmConnected ? (
+            <button className="conn-status on" onClick={disconnect}>
+              <span className="status-dot" style={{ background: 'var(--accent)' }} />Connected
+            </button>
+          ) : (
+            <button className="conn-status" onClick={connectLastfm} disabled={connecting}>
+              {connecting ? 'Connecting…' : 'Connect'}
+            </button>
+          )}
         </div>
+
+        <div className="info-grid">
+          <div className="info-tile">
+            <span className="it-label">Home city</span>
+            <b>{user.city || '—'}{user.region ? `, ${user.region}` : ''}</b>
+          </div>
+          <div className="info-tile">
+            <span className="it-label">Member since</span>
+            <b>{memberSince}</b>
+          </div>
+          <div className="info-tile">
+            <span className="it-label">Theme</span>
+            <b style={{ textTransform: 'capitalize' }}>{settings.theme}</b>
+          </div>
+          <div className="info-tile">
+            <span className="it-label">Card layout</span>
+            <b style={{ textTransform: 'capitalize' }}>{settings.showsCardLayout}</b>
+          </div>
+        </div>
+
+        <div className="session-block">
+          <div className="sb-row"><span>Session</span><b>iron-session · secure</b></div>
+          <div className="sb-row"><span>Caching</span><b>30 min local · per-hub DB</b></div>
+          <div className="sb-row"><span>Version</span><b>ShowFinder 2.4.0</b></div>
+        </div>
+
+        <form action="/api/auth/logout" method="POST">
+          <button type="submit" className="signout-btn">Sign out</button>
+        </form>
       </div>
       <NavDock />
     </div>

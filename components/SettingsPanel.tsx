@@ -4,8 +4,8 @@ import { useSettings, COLORWAYS } from './SettingsContext'
 
 interface Props { onClose: () => void }
 
-const ALL_NAV_TABS = [
-  { id: 'dashboard', label: 'Home' },
+const NAV_OPTS = [
+  { id: 'home', label: 'Home' },
   { id: 'artists', label: 'Artists' },
   { id: 'shows', label: 'Shows' },
   { id: 'tracked', label: 'Tracked' },
@@ -13,124 +13,140 @@ const ALL_NAV_TABS = [
   { id: 'account', label: 'Account' },
 ]
 
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 14 14" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7.2 5.8 10 11 4.2" />
+    </svg>
+  )
+}
+
 export default function SettingsPanel({ onClose }: Props) {
   const { settings, update } = useSettings()
-  const [section, setSection] = useState<'theme' | 'layout' | 'navdock'>('theme')
+  const [tab, setTab] = useState<'theme' | 'layout' | 'navdock'>('theme')
 
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
-      <div className="panel" style={{ position: 'relative', width: '100%', maxWidth: 440, maxHeight: '80vh', overflow: 'auto', padding: 0 }}>
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 20, color: 'var(--text)' }}>Settings</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 20, padding: 4 }}>&times;</button>
+    <div className="modal-scrim" onMouseDown={onClose}>
+      <div className="settings-panel" onMouseDown={e => e.stopPropagation()}>
+        <div className="sp-head">
+          <h2>Settings</h2>
+          <button className="icon-btn" onClick={onClose}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
         </div>
-
-        <div style={{ display: 'flex', gap: 4, padding: '12px 24px 0' }}>
-          {([['theme', 'Theme'], ['layout', 'Layout'], ['navdock', 'NavDock']] as const).map(([key, label]) => (
-            <button key={key} onClick={() => setSection(key)} className={`chip ${section === key ? 'active' : ''}`} style={{ fontSize: 11, padding: '5px 12px' }}>{label}</button>
+        <div className="sp-tabs">
+          {(['theme', 'layout', 'navdock'] as const).map(t => (
+            <button key={t} className={`sp-tab ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>
+              {t === 'theme' ? 'Theme' : t === 'layout' ? 'Layout' : 'NavDock'}
+            </button>
           ))}
         </div>
 
-        <div style={{ padding: '16px 24px 24px' }}>
-          {section === 'theme' && (
-            <div>
-              <div className="section-label" style={{ marginBottom: 10 }}>Color theme</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+        <div className="sp-body">
+          {tab === 'theme' && (
+            <>
+              <div className="sp-section-label">Colorway &middot; {COLORWAYS.length} presets</div>
+              <div className="swatch-grid">
                 {COLORWAYS.map(cw => {
                   const active = settings.theme === cw.id
                   return (
-                    <button
-                      key={cw.id}
+                    <button key={cw.id} className={`swatch ${active ? 'active' : ''}`}
                       onClick={() => update('theme', cw.id)}
-                      style={{
-                        display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 12px', borderRadius: 'var(--r-md)',
-                        border: `2px solid ${active ? cw.accent : 'var(--border)'}`,
-                        background: active ? cw.accent + '15' : cw.bg,
-                        cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: cw.accent, boxShadow: active ? `0 0 12px ${cw.accent}60` : 'none', flexShrink: 0 }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: cw.text, fontFamily: 'Syne, sans-serif' }}>{cw.name}</span>
+                      style={{ background: cw.bg, borderColor: active ? cw.accent : cw.border }}>
+                      <div className="sw-preview" style={{ background: cw.surface, borderColor: cw.border }}>
+                        <span style={{ background: cw.accent }} />
+                        <span style={{ background: cw.text, opacity: 0.85 }} />
+                        <span style={{ background: cw.dim, opacity: 0.6 }} />
                       </div>
-                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
-                        <div style={{ width: 16, height: 16, borderRadius: 4, background: cw.bg, border: `1px solid ${cw.border}` }} />
-                        <div style={{ width: 16, height: 16, borderRadius: 4, background: cw.surface, border: `1px solid ${cw.border}` }} />
-                        <div style={{ width: 16, height: 16, borderRadius: 4, background: cw.surface2, border: `1px solid ${cw.border}` }} />
-                        <div style={{ width: 16, height: 16, borderRadius: 4, background: cw.accent }} />
-                      </div>
+                      <span className="sw-name" style={{ color: cw.text }}>{cw.name}</span>
+                      {active && (
+                        <span className="sw-check" style={{ background: cw.accent, color: cw.accentInk }}>
+                          <CheckIcon />
+                        </span>
+                      )}
                     </button>
                   )
                 })}
               </div>
-            </div>
+            </>
           )}
 
-          {section === 'layout' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div>
-                <div className="section-label" style={{ marginBottom: 8 }}>Shows card layout</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {([['compact', 'Compact'], ['standard', 'Standard'], ['large', 'Large']] as const).map(([val, label]) => (
-                    <button key={val} onClick={() => update('showsCardLayout', val)} className={`chip ${settings.showsCardLayout === val ? 'active' : ''}`}>{label}</button>
-                  ))}
-                </div>
+          {tab === 'layout' && (
+            <>
+              <div className="sp-section-label">Card size</div>
+              <div className="seg">
+                {(['compact', 'comfy', 'rich'] as const).map(v => (
+                  <button key={v} className={`seg-btn ${settings.showsCardLayout === v ? 'on' : ''}`}
+                    onClick={() => update('showsCardLayout', v)}
+                    style={settings.showsCardLayout === v ? { color: 'var(--accent-ink)', background: 'var(--accent)' } : {}}>
+                    {v === 'compact' ? 'Compact' : v === 'comfy' ? 'Comfortable' : 'Rich'}
+                  </button>
+                ))}
               </div>
-              <div>
-                <div className="section-label" style={{ marginBottom: 8 }}>Visible filters (Shows)</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {Object.entries({ sort: 'Sort', source: 'Source', city: 'City', hubs: 'Tour hubs' }).map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <input type="checkbox" checked={settings.showsFilters[key as keyof typeof settings.showsFilters]} onChange={(e) => update('showsFilters', { ...settings.showsFilters, [key]: e.target.checked })} style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
-                      {label}
-                    </label>
-                  ))}
-                </div>
+
+              <div className="sp-section-label">Artist view</div>
+              <div className="seg">
+                {(['list', 'grid'] as const).map(v => (
+                  <button key={v} className={`seg-btn ${settings.artistView === v ? 'on' : ''}`}
+                    onClick={() => update('artistView', v)}
+                    style={settings.artistView === v ? { color: 'var(--accent-ink)', background: 'var(--accent)' } : {}}>
+                    {v === 'list' ? 'List' : 'Grid'}
+                  </button>
+                ))}
               </div>
-              <div>
-                <div className="section-label" style={{ marginBottom: 8 }}>Dashboard sections</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {Object.entries({ quickStats: 'Quick stats', nextShow: 'Next show', artistCount: 'Artist count' }).map(([key, label]) => (
-                    <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <input type="checkbox" checked={settings.dashboardSections[key as keyof typeof settings.dashboardSections]} onChange={(e) => update('dashboardSections', { ...settings.dashboardSections, [key]: e.target.checked })} style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="section-label" style={{ marginBottom: 8 }}>Artist view</div>
-                <div style={{ display: 'flex', gap: 6 }}>
-                  {([['list', 'List'], ['grid', 'Grid']] as const).map(([val, label]) => (
-                    <button key={val} onClick={() => update('artistView', val)} className={`chip ${settings.artistView === val ? 'active' : ''}`}>{label}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
+
+              <div className="sp-section-label">Filters &amp; sections</div>
+              <button className="toggle-line" onClick={() => update('showsFilters', { ...settings.showsFilters, sort: !settings.showsFilters.sort })}>
+                <div className="tl-text"><span className="tl-label">Show filters</span><span className="tl-sub">Sort, source &amp; city on Shows</span></div>
+                <span className={`switch ${settings.showsFilters.sort ? 'on' : ''}`}><i /></span>
+              </button>
+              <button className="toggle-line" onClick={() => update('showPresale', !settings.showPresale)}>
+                <div className="tl-text"><span className="tl-label">Presale countdowns</span><span className="tl-sub">Live countdown banner on Shows</span></div>
+                <span className={`switch ${settings.showPresale ? 'on' : ''}`}><i /></span>
+              </button>
+
+              <div className="sp-section-label">Dashboard sections</div>
+              <button className="toggle-line" onClick={() => update('dashboardSections', { ...settings.dashboardSections, quickStats: !settings.dashboardSections.quickStats })}>
+                <div className="tl-text"><span className="tl-label">Quick stats</span></div>
+                <span className={`switch ${settings.dashboardSections.quickStats ? 'on' : ''}`}><i /></span>
+              </button>
+              <button className="toggle-line" onClick={() => update('dashboardSections', { ...settings.dashboardSections, quickActions: !settings.dashboardSections.quickActions })}>
+                <div className="tl-text"><span className="tl-label">Quick actions</span></div>
+                <span className={`switch ${settings.dashboardSections.quickActions ? 'on' : ''}`}><i /></span>
+              </button>
+              <button className="toggle-line" onClick={() => update('dashboardSections', { ...settings.dashboardSections, topArtists: !settings.dashboardSections.topArtists })}>
+                <div className="tl-text"><span className="tl-label">Top artists</span></div>
+                <span className={`switch ${settings.dashboardSections.topArtists ? 'on' : ''}`}><i /></span>
+              </button>
+            </>
           )}
 
-          {section === 'navdock' && (
-            <div>
-              <div className="section-label" style={{ marginBottom: 10 }}>Visible tabs</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {ALL_NAV_TABS.map(tab => {
-                  const visible = settings.navdockTabs.includes(tab.id)
+          {tab === 'navdock' && (
+            <>
+              <div className="sp-section-label">Visible tabs &middot; {settings.navdockTabs.length}</div>
+              <div className="navtab-list">
+                {NAV_OPTS.map(o => {
+                  const on = settings.navdockTabs.includes(o.id)
+                  const minReached = on && settings.navdockTabs.length <= 3
                   return (
-                    <label key={tab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <input type="checkbox" checked={visible} onChange={(e) => {
-                        const next = e.target.checked ? [...settings.navdockTabs, tab.id] : settings.navdockTabs.filter(id => id !== tab.id)
-                        update('navdockTabs', next)
-                      }} style={{ accentColor: 'var(--accent)', width: 16, height: 16 }} />
-                      {tab.label}
-                    </label>
+                    <button key={o.id} className="toggle-line" onClick={() => {
+                      if (minReached) return
+                      const next = on
+                        ? settings.navdockTabs.filter(t => t !== o.id)
+                        : [...settings.navdockTabs, o.id]
+                      update('navdockTabs', next)
+                    }}>
+                      <div className="tl-text">
+                        <span className="tl-label">{o.label}</span>
+                        {minReached && <span className="tl-sub">Minimum 3 tabs</span>}
+                      </div>
+                      <span className={`switch ${on ? 'on' : ''}`}><i /></span>
+                    </button>
                   )
                 })}
               </div>
-            </div>
+              <div className="sp-hint">Settings is always reachable via the gear icon.</div>
+            </>
           )}
         </div>
       </div>

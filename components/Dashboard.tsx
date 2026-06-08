@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import NavDock from './NavDock'
 import LocationBar from './LocationBar'
 import ArtistSearch from './ArtistSearch'
-import SettingsPanel from './SettingsPanel'
 import { useSettings } from './SettingsContext'
 import type { ScoredArtist, UserLocation, TouringHub } from '@/types'
 
@@ -14,6 +13,14 @@ interface Props {
 
 const HIDDEN_KEY = 'showfinder_hidden_artists'
 const ARTIST_CACHE_TTL_MS = 30 * 60 * 1000
+const PERIODS = [
+  { value: '7day', label: '7d' },
+  { value: '1month', label: '1m' },
+  { value: '3month', label: '3m' },
+  { value: '6month', label: '6m' },
+  { value: '12month', label: '12m' },
+  { value: 'overall', label: 'All' },
+]
 
 function loadHidden(): Set<string> {
   if (typeof window === 'undefined') return new Set()
@@ -21,6 +28,26 @@ function loadHidden(): Set<string> {
 }
 function saveHidden(s: Set<string>) {
   try { localStorage.setItem(HIDDEN_KEY, JSON.stringify([...s])) } catch {}
+}
+
+function Avatar({ name, size = 40 }: { name: string; size?: number }) {
+  const initials = name.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+  let hash = 0
+  for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) >>> 0
+  const hue = hash % 360
+  return (
+    <div className="avatar" style={{
+      width: size, height: size, borderRadius: size * 0.25, fontSize: size * 0.34,
+      background: `linear-gradient(135deg, oklch(0.42 0.09 ${hue}), oklch(0.30 0.07 ${hue + 40}))`,
+    }}>{initials}</div>
+  )
+}
+
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
 }
 
 export default function Dashboard({ lastfmUser, savedLocation }: Props) {
@@ -34,13 +61,12 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [showHidden, setShowHidden] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => { setHidden(loadHidden()) }, [])
   useEffect(() => { loadArtists() }, [period])
 
   function invalidateArtistCache() {
-    for (const p of ['7day','1month','3month','6month','12month','overall']) {
+    for (const p of ['7day', '1month', '3month', '6month', '12month', 'overall']) {
       try { localStorage.removeItem(`showfinder_artists_${p}`) } catch {}
     }
   }
@@ -102,11 +128,7 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
     if (artistList.length === 0) {
       try {
         const r = await fetch('/api/artists?period=6month')
-        if (r.ok) {
-          const d = await r.json()
-          artistList = d.artists ?? []
-          setArtists(artistList)
-        }
+        if (r.ok) { const d = await r.json(); artistList = d.artists ?? []; setArtists(artistList) }
       } catch {}
     }
     if (artistList.length) {
@@ -122,219 +144,136 @@ export default function Dashboard({ lastfmUser, savedLocation }: Props) {
     window.location.href = '/shows'
   }
 
-  const periods = [['7day','7d'],['1month','1m'],['3month','3m'],['6month','6m'],['12month','12m'],['overall','All']]
-
-  const hiddenArtists = artists.filter(a => hidden.has(a.name.toLowerCase()))
   const visibleArtists = showHidden ? artists : artists.filter(a => !hidden.has(a.name.toLowerCase()))
+  const hiddenArtists = artists.filter(a => hidden.has(a.name.toLowerCase()))
   const activeVisibleCount = artists.filter(a => !hidden.has(a.name.toLowerCase())).length
   const trackedCount = settings.trackedEvents?.length ?? 0
 
+  const stats = [
+    { label: 'Artists', value: loading ? '-' : activeVisibleCount, color: 'var(--sec-artists)', href: '/artists' },
+    { label: 'Shows found', value: '-', color: 'var(--sec-shows)', href: '/shows' },
+    { label: 'Tracked', value: trackedCount, color: 'var(--sec-tracked)', href: '/tracked' },
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 20px' }}>
-        {/* Header */}
-        <div style={{ marginBottom: 24, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>ShowFinder</h1>
-              {lastfmUser && <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>Welcome back, {lastfmUser.displayName}</p>}
-            </div>
-            <button
-              onClick={() => setShowSettings(true)}
-              style={{
-                background: 'var(--surface-1)', border: '1px solid var(--border)', borderRadius: 'var(--r-md)',
-                padding: '8px 12px', cursor: 'pointer', color: 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', gap: 6, fontSize: 12,
-                transition: 'all 0.15s',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              Settings
-            </button>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
+      <div className="page">
+        <header className="page-head">
+          <div>
+            <div className="greeting">{getGreeting()}</div>
+            <h1 className="page-title">ShowFinder</h1>
           </div>
-        </div>
+          <div className="head-status"><span className="status-dot" style={{ background: '#3ddc91' }} />Synced</div>
+        </header>
 
-        {/* Quick stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24, animation: 'fadeUp 0.5s 0.05s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <a href="/artists" style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: 'var(--accent)' }}>{loading ? '-' : activeVisibleCount}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Artists</div>
-            </div>
-          </a>
-          <a href="/shows" style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: 'var(--text)' }}>{location ? 'Find' : '-'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Shows</div>
-            </div>
-          </a>
-          <a href="/tracked" style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ padding: '16px 14px', textAlign: 'center', cursor: 'pointer' }}>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 24, color: '#eab308' }}>{trackedCount}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Tracked</div>
-            </div>
-          </a>
-        </div>
-
-        {/* Quick actions */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 24, animation: 'fadeUp 0.5s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <a href="/discover" style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="m16 8-3 6-6 3 3-6z"/></svg>
-              <div>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Discover</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Recommendations</div>
-              </div>
-            </div>
-          </a>
-          <button onClick={() => setShowSettings(true)} style={{ textDecoration: 'none' }}>
-            <div className="card" style={{ padding: '14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left' }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-              <div>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>Settings</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Theme & layout</div>
-              </div>
-            </div>
-          </button>
-        </div>
-
-        <div className="divider" style={{ marginBottom: 20 }} />
-
-        {/* Location & Search */}
         <LocationBar savedLocation={savedLocation} onLocationChange={(loc, h) => { setLocation(loc); setHubs(h) }} />
-        <ArtistSearch onAdd={addArtist} savedNames={savedNames} />
 
-        {lastfmUser && (
-          <div style={{ marginBottom: 20 }}>
-            <div className="section-label" style={{ marginBottom: 8 }}>Time period</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {periods.map(([val, label]) => (
-                <button key={val} onClick={() => setPeriod(val)} className={period === val ? 'chip active' : 'chip'}>{label}</button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="divider" />
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span className="section-label">
-            {loading ? 'Loading...' : `${activeVisibleCount} ${activeVisibleCount === 1 ? 'artist' : 'artists'}`}
-          </span>
-          {hiddenArtists.length > 0 && (
-            <button onClick={() => setShowHidden(s => !s)} className="chip" style={{ fontSize: 10 }}>
-              {showHidden ? 'Hide' : 'Show'} {hiddenArtists.length} hidden
-            </button>
-          )}
-        </div>
-
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="skeleton" style={{ height: 56, animationDelay: `${i * 0.05}s` }} />
+        {settings.dashboardSections.quickStats && (
+          <div className="stat-row">
+            {stats.map(s => (
+              <button key={s.label} className="stat-card" onClick={() => window.location.href = s.href}>
+                <span className="stat-value" style={{ color: s.color }}>{s.value}</span>
+                <span className="stat-label">{s.label}</span>
+              </button>
             ))}
           </div>
-        ) : visibleArtists.length === 0 && hiddenArtists.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--text-dim)', fontFamily: 'Outfit, sans-serif', fontSize: 14 }}>
-            <p style={{ marginBottom: 8 }}>No artists found.</p>
-            <p style={{ fontSize: 12, color: 'var(--text-faint)' }}>Add one above or connect Last.fm.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {visibleArtists.map((artist, i) => {
-              const isHidden = hidden.has(artist.name.toLowerCase())
-              return (
-                <div
-                  key={artist.name}
-                  className="card"
-                  style={{
-                    display: 'flex', alignItems: 'center', padding: '12px 16px', gap: 12,
-                    opacity: isHidden ? 0.55 : 1,
-                    animation: `fadeUp 0.4s ${i * 0.03}s cubic-bezier(0.16,1,0.3,1) both`,
-                  }}
-                >
-                  <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 11, color: 'var(--text-faint)', minWidth: 26, textAlign: 'right' }}>
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, color: 'var(--text)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{artist.name}</p>
-                    {artist.playCount != null && (
-                      <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)', marginTop: 2 }}>{artist.playCount.toLocaleString()} plays</p>
-                    )}
-                  </div>
-                  {artist.source === 'manual' && (
-                    <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>MANUAL</span>
-                  )}
-                  {isHidden ? (
-                    <button
-                      onClick={() => unhide(artist.name)}
-                      style={{ fontSize: 11, color: 'var(--accent)', background: 'none', border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)', padding: '5px 10px', cursor: 'pointer', fontFamily: 'Outfit, sans-serif' }}
-                    >Restore</button>
-                  ) : (
-                    <button
-                      onClick={() => askRemove(artist.name)}
-                      aria-label={`Remove ${artist.name}`}
-                      style={{
-                        fontSize: 18, lineHeight: 1, color: 'var(--text-faint)',
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '4px 8px', fontFamily: 'Outfit, sans-serif',
-                        transition: 'color 0.15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--red)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-faint)'}
-                    >&times;</button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
         )}
 
-        {location && activeVisibleCount > 0 && (
-          <div style={{ position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)', zIndex: 500, animation: 'fadeUp 0.4s 0.2s cubic-bezier(0.16,1,0.3,1) both' }}>
-            <button onClick={goToShows} className="btn-primary" style={{ padding: '14px 28px', fontSize: 15, borderRadius: 'var(--r-lg)', boxShadow: '0 8px 28px var(--accent-glow)', whiteSpace: 'nowrap' }}>
-              Find Shows Near {location.city} &rarr;
+        {settings.dashboardSections.quickActions && (
+          <div className="action-row">
+            <button className="action-card" onClick={() => window.location.href = '/discover'}>
+              <div className="ac-ico" style={{ background: 'var(--sec-discover)1f', color: 'var(--sec-discover)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="m16 8-3 5-5 2 2-5Z" /></svg>
+              </div>
+              <div className="ac-text"><b>Discover</b><span>Recs &amp; drifted artists</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+            </button>
+            <button className="action-card" onClick={() => window.location.href = '/tracked'}>
+              <div className="ac-ico" style={{ background: 'var(--sec-tracked)1f', color: 'var(--sec-tracked)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--sec-tracked)" stroke="var(--sec-tracked)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+              </div>
+              <div className="ac-text"><b>Tracked</b><span>{trackedCount} starred shows</span></div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
             </button>
           </div>
         )}
+
+        <ArtistSearch onAdd={addArtist} savedNames={savedNames} />
+
+        {settings.dashboardSections.topArtists && (
+          <section className="block">
+            <div className="block-head">
+              <h2 className="block-title">Your top artists</h2>
+            </div>
+            <div className="seg">
+              {PERIODS.map(p => (
+                <button key={p.value} className={`seg-btn ${period === p.value ? 'on' : ''}`}
+                  onClick={() => setPeriod(p.value)}
+                  style={period === p.value ? { color: 'var(--accent-ink)', background: 'var(--accent)' } : {}}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="artist-list">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 56 }} />)
+              ) : visibleArtists.length === 0 ? (
+                <div className="empty"><div className="empty-title">No artists found</div><div className="empty-sub">Add one above or connect Last.fm.</div></div>
+              ) : (
+                visibleArtists.slice(0, 5).map((a, i) => (
+                  <div key={a.name} className="artist-row">
+                    <span className="ar-rank" style={{ color: 'var(--accent)' }}>{i + 1}</span>
+                    <Avatar name={a.name} />
+                    <div className="ar-info">
+                      <div className="ar-name">{a.name}{a.source === 'manual' && <span className="manual-badge">MANUAL</span>}</div>
+                      <div className="ar-plays">{a.playCount?.toLocaleString() ?? 0} plays</div>
+                    </div>
+                    <button className="ar-remove" onClick={() => askRemove(a.name)} title="Remove">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            {!loading && visibleArtists.length > 5 && (
+              <button className="see-all" onClick={() => window.location.href = '/artists'}>
+                See all {activeVisibleCount} artists
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+              </button>
+            )}
+          </section>
+        )}
+
+        <div className="fab-wrap">
+          <button className="fab" onClick={goToShows} style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /></svg>
+            <span>Find Shows</span>
+          </button>
+        </div>
       </div>
 
       {confirmRemove && (
         <div onClick={cancelRemove} style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-          zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-          animation: 'fadeIn 0.2s ease',
+          backdropFilter: 'blur(8px)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
         }}>
-          <div onClick={e => e.stopPropagation()} className="card" style={{ padding: 24, maxWidth: 380, width: '100%', animation: 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)', marginBottom: 8 }}>Remove {confirmRemove}?</p>
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)', marginBottom: 24, lineHeight: 1.5 }}>
+          <div onClick={e => e.stopPropagation()} className="panel" style={{ padding: 24, maxWidth: 380, width: '100%' }}>
+            <p style={{ fontWeight: 700, fontSize: 18, marginBottom: 8 }}>Remove {confirmRemove}?</p>
+            <p style={{ fontSize: 13, color: 'var(--dim)', marginBottom: 24, lineHeight: 1.5 }}>
               {artists.find(a => a.name === confirmRemove)?.source === 'manual'
-                ? 'This will permanently remove this artist from your saved list.'
-                : 'This will hide this artist from your view. You can restore it later using the "Show hidden" button.'}
+                ? 'This will permanently remove this artist.'
+                : 'This will hide this artist. You can restore later.'}
             </p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button onClick={cancelRemove} className="btn-ghost" style={{ padding: '9px 16px', fontSize: 13 }}>Cancel</button>
-              <button
-                onClick={() => {
-                  const a = artists.find(x => x.name === confirmRemove)
-                  if (a) confirmRemoveArtist(a.name, a.source as 'lastfm' | 'manual')
-                }}
-                style={{
-                  padding: '9px 16px', borderRadius: 'var(--r-md)', border: 'none',
-                  background: 'var(--red)', color: '#fff',
-                  fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-                  transition: 'opacity 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-              >Remove</button>
+              <button onClick={cancelRemove} style={{ padding: '9px 16px', fontSize: 13, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>Cancel</button>
+              <button onClick={() => { const a = artists.find(x => x.name === confirmRemove); if (a) confirmRemoveArtist(a.name, a.source as 'lastfm' | 'manual') }}
+                style={{ padding: '9px 16px', borderRadius: 'var(--radius-sm)', border: 'none', background: '#ff6f6f', color: '#fff', fontWeight: 700, fontSize: 13 }}>Remove</button>
             </div>
           </div>
         </div>
       )}
 
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       <NavDock />
     </div>
   )

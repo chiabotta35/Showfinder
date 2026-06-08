@@ -58,7 +58,7 @@ export default function AuthForms() {
           animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)',
         }}>
           <p style={{
-            fontFamily: 'Syne, sans-serif',
+            fontFamily: 'var(--font-heading), sans-serif',
             fontWeight: 700,
             fontSize: 11,
             color: 'var(--accent)',
@@ -67,7 +67,7 @@ export default function AuthForms() {
             marginBottom: 12,
           }}>ShowFinder</p>
           <h1 style={{
-            fontFamily: 'Syne, sans-serif',
+            fontFamily: 'var(--font-heading), sans-serif',
             fontWeight: 800,
             fontSize: 24,
             color: 'var(--text)',
@@ -76,7 +76,7 @@ export default function AuthForms() {
             {mode === 'login' ? 'Welcome back' : 'Create account'}
           </h1>
           <p style={{
-            fontFamily: 'Outfit, sans-serif',
+            fontFamily: 'var(--font-body), sans-serif',
             fontSize: 13,
             color: 'var(--text-secondary)',
           }}>
@@ -102,7 +102,7 @@ export default function AuthForms() {
               <p style={{
                 fontSize: 13,
                 color: 'var(--red)',
-                fontFamily: 'Outfit, sans-serif',
+                fontFamily: 'var(--font-body), sans-serif',
                 margin: 0,
               }}>{error}</p>
             </div>
@@ -121,7 +121,7 @@ export default function AuthForms() {
               justifyContent: 'center',
               gap: 8,
               fontSize: 14,
-              fontFamily: 'Outfit, sans-serif',
+              fontFamily: 'var(--font-body), sans-serif',
               fontWeight: 600,
               marginBottom: 20,
               border: '1px solid color-mix(in srgb, var(--artists-primary) 30%, var(--border))',
@@ -136,7 +136,7 @@ export default function AuthForms() {
           {/* Divider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 600, fontSize: 10, color: 'var(--text-faint)', letterSpacing: 1.5 }}>OR</span>
+            <span style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 600, fontSize: 10, color: 'var(--text-faint)', letterSpacing: 1.5 }}>OR</span>
             <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
           </div>
 
@@ -145,7 +145,7 @@ export default function AuthForms() {
             <div style={{ marginBottom: 16 }}>
               <label style={{
                 display: 'block',
-                fontFamily: 'Syne, sans-serif',
+                fontFamily: 'var(--font-heading), sans-serif',
                 fontWeight: 600,
                 fontSize: 11,
                 color: 'var(--text-secondary)',
@@ -165,7 +165,7 @@ export default function AuthForms() {
                   borderRadius: 'var(--r-md)',
                   padding: '0 14px',
                   color: 'var(--text)',
-                  fontFamily: 'Outfit, sans-serif',
+                  fontFamily: 'var(--font-body), sans-serif',
                   fontSize: 14,
                   outline: 'none',
                   transition: 'border-color 0.15s ease',
@@ -177,7 +177,7 @@ export default function AuthForms() {
             <div style={{ marginBottom: 24 }}>
               <label style={{
                 display: 'block',
-                fontFamily: 'Syne, sans-serif',
+                fontFamily: 'var(--font-heading), sans-serif',
                 fontWeight: 600,
                 fontSize: 11,
                 color: 'var(--text-secondary)',
@@ -199,7 +199,7 @@ export default function AuthForms() {
                   borderRadius: 'var(--r-md)',
                   padding: '0 14px',
                   color: 'var(--text)',
-                  fontFamily: 'Outfit, sans-serif',
+                  fontFamily: 'var(--font-body), sans-serif',
                   fontSize: 14,
                   outline: 'none',
                   transition: 'border-color 0.15s ease',
@@ -217,7 +217,7 @@ export default function AuthForms() {
                 width: '100%',
                 height: 44,
                 fontSize: 14,
-                fontFamily: 'Outfit, sans-serif',
+                fontFamily: 'var(--font-body), sans-serif',
                 fontWeight: 600,
                 opacity: loading ? 0.6 : 1,
                 cursor: loading ? 'wait' : 'pointer',
@@ -231,7 +231,7 @@ export default function AuthForms() {
         {/* Toggle */}
         <p style={{
           textAlign: 'center',
-          fontFamily: 'Outfit, sans-serif',
+          fontFamily: 'var(--font-body), sans-serif',
           fontSize: 13,
           color: 'var(--text-secondary)',
           marginTop: 20,
@@ -244,7 +244,7 @@ export default function AuthForms() {
               border: 'none',
               color: 'var(--accent)',
               cursor: 'pointer',
-              fontFamily: 'Outfit, sans-serif',
+              fontFamily: 'var(--font-body), sans-serif',
               fontSize: 13,
               fontWeight: 600,
             }}

@@ -1,186 +1,136 @@
 'use client'
 import { useState } from 'react'
 import { useSettings, type TrackedShow } from '@/components/SettingsContext'
+import NavDock from './NavDock'
+
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+const moNm = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+function fmtDay(d: string) { return new Date(d).getDate() }
+function fmtMon(d: string) { return MON[new Date(d).getMonth()] }
+function fmtTime(d: string) {
+  const dt = new Date(d); let h = dt.getHours(); const m = dt.getMinutes()
+  const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12
+  return `${h}:${String(m).padStart(2, '0')} ${ap}`
+}
 
 export default function TrackedClient() {
   const { settings, toggleTrackedEvent } = useSettings()
   const [view, setView] = useState<'list' | 'calendar'>('list')
-  const [month, setMonth] = useState(() => new Date().getMonth())
-  const [year, setYear] = useState(() => new Date().getFullYear())
+  const [cursor, setCursor] = useState(() => new Date())
 
   const tracked = settings.trackedEvents
-  const sorted = [...tracked].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-  const future = sorted.filter(e => new Date(e.date) >= new Date(new Date().toDateString()))
+  const items = [...tracked].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+  const future = items.filter(e => new Date(e.date) >= new Date(new Date().toDateString()))
 
-  const downloadCalendar = () => {
-    const cal = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//ShowFinder//Tracked//EN', 'X-WR-CALNAME:ShowFinder Shows']
-    future.forEach((s, i) => {
+  const exportIcs = () => {
+    let ics = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//ShowFinder//EN\n'
+    items.forEach(s => {
       const dt = new Date(s.date)
-      const dtStart = dt.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-      const dtEnd = new Date(dt.getTime() + 3 * 60 * 60 * 1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
-      const loc = [s.venueName, s.venueCity].filter(Boolean).join(', ')
-      cal.push(
-        'BEGIN:VEVENT',
-        `UID:${s.id || `showfinder-${i}`}`,
-        `DTSTART:${dtStart}`,
-        `DTEND:${dtEnd}`,
-        `SUMMARY:${s.artistName} at ${s.venueName || 'TBD'}`,
-        loc ? `LOCATION:${loc}` : '',
-        s.ticketUrl ? `URL:${s.ticketUrl}` : '',
-        'END:VEVENT',
-      )
+      const z = (n: number) => String(n).padStart(2, '0')
+      const stamp = `${dt.getFullYear()}${z(dt.getMonth() + 1)}${z(dt.getDate())}T${z(dt.getHours())}${z(dt.getMinutes())}00`
+      ics += `BEGIN:VEVENT\nSUMMARY:${s.artistName} @ ${s.venueName || 'TBD'}\nLOCATION:${s.venueCity || ''}\nDTSTART:${stamp}\nEND:VEVENT\n`
     })
-    cal.push('END:VCALENDAR')
-    const blob = new Blob([cal.filter(Boolean).join('\r\n')], { type: 'text/calendar;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'showfinder-shows.ics'
-    a.click()
-    URL.revokeObjectURL(url)
+    ics += 'END:VCALENDAR'
+    const blob = new Blob([ics], { type: 'text/calendar' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'showfinder.ics'; a.click()
   }
 
-  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-  const getDaysInMonth = (m: number, y: number) => new Date(y, m + 1, 0).getDate()
-  const getFirstDayOfMonth = (m: number, y: number) => new Date(y, m, 1).getDay()
-
-  const showsByDate: Record<string, TrackedShow[]> = {}
-  future.forEach(s => {
-    const d = s.date.slice(0, 10)
-    if (!showsByDate[d]) showsByDate[d] = []
-    showsByDate[d].push(s)
-  })
-
-  const daysInMonth = getDaysInMonth(month, year)
-  const firstDay = getFirstDayOfMonth(month, year)
-  const today = new Date().toISOString().slice(0, 10)
+  const y = cursor.getFullYear(), m = cursor.getMonth()
+  const first = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate()
+  const byDay: Record<number, TrackedShow[]> = {}
+  items.forEach(s => { const d = new Date(s.date); if (d.getFullYear() === y && d.getMonth() === m) (byDay[d.getDate()] = byDay[d.getDate()] || []).push(s) })
+  const cells: (number | null)[] = []
+  for (let i = 0; i < first; i++) cells.push(null)
+  for (let d = 1; d <= days; d++) cells.push(d)
+  const today = new Date()
 
   return (
-    <div style={{ padding: '24px 20px 120px', maxWidth: 500, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 26, color: 'var(--text)' }}>Tracked</h1>
-          <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
-            {tracked.length === 0 ? 'No shows starred' : `${tracked.length} starred · ${future.length} upcoming`}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => setView(view === 'list' ? 'calendar' : 'list')} className="chip" style={{ fontSize: 11, padding: '5px 12px' }}>
-            {view === 'list' ? 'Calendar' : 'List'}
-          </button>
-          {future.length > 0 && (
-            <button onClick={downloadCalendar} className="chip active" style={{ fontSize: 11, padding: '5px 12px' }}>
-              .ics
-            </button>
-          )}
-        </div>
-      </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
+      <div className="page">
+        <header className="page-head">
+          <h1 className="page-title">Tracked</h1>
+          <span className="count-pill" style={{ color: 'var(--sec-tracked)', borderColor: 'var(--sec-tracked)55' }}>{items.length}</span>
+        </header>
 
-      {tracked.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0' }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>&#9733;</div>
-          <h3 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)', marginBottom: 8 }}>No starred shows</h3>
-          <p style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 280, margin: '0 auto' }}>
-            Go to Shows and tap the star on any show to track it here.
-          </p>
-        </div>
-      )}
-
-      {view === 'list' && sorted.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {sorted.map((show) => {
-            const d = new Date(show.date)
-            const isPast = d < new Date()
-            return (
-              <div key={show.id} style={{
-                padding: '12px 14px', borderRadius: 'var(--r-md)',
-                background: 'var(--surface-1)', border: '1px solid var(--border)',
-                opacity: isPast ? 0.5 : 1,
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 12 }}>
-                  <div style={{ minWidth: 44, textAlign: 'center' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 600 }}>{d.toLocaleDateString('en-US', { weekday: 'short' })}</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Syne, sans-serif', color: 'var(--text)' }}>{d.getDate()}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{d.toLocaleDateString('en-US', { month: 'short' })}</div>
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text)' }}>{show.artistName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {show.venueName || 'TBD'}{show.venueCity ? ` — ${show.venueCity}` : ''}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 4, alignItems: 'start' }}>
-                    {show.ticketUrl && (
-                      <a
-                        href={show.ticketUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          fontSize: 11, fontWeight: 700, color: 'var(--bg)',
-                          background: 'var(--accent)', borderRadius: 'var(--r-sm)',
-                          padding: '6px 10px', textDecoration: 'none', whiteSpace: 'nowrap',
-                        }}
-                      >Tickets</a>
-                    )}
-                    <button
-                      onClick={() => toggleTrackedEvent(show)}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        color: '#eab308', padding: '6px 4px',
-                      }}
-                      title="Unstar"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="#eab308" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {view === 'calendar' && (
-        <div className="panel" style={{ padding: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <button onClick={() => { if (month === 0) { setMonth(11); setYear(y => y - 1) } else setMonth(m => m - 1) }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>&#8592;</button>
-            <div style={{ fontWeight: 800, fontFamily: 'Syne, sans-serif', fontSize: 16, color: 'var(--text)' }}>{MONTHS[month]} {year}</div>
-            <button onClick={() => { if (month === 11) { setMonth(0); setYear(y => y + 1) } else setMonth(m => m + 1) }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>&#8594;</button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-              <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'var(--text-dim)', padding: '4px 0' }}>{d}</div>
+        <div className="tracked-toolbar">
+          <div className="seg" style={{ flex: 1 }}>
+            {(['list', 'calendar'] as const).map(v => (
+              <button key={v} className={`seg-btn ${view === v ? 'on' : ''}`} onClick={() => setView(v)}
+                style={view === v ? { color: 'var(--accent-ink)', background: 'var(--accent)' } : {}}>
+                {v === 'list' ? 'List' : 'Calendar'}
+              </button>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-            {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
-            {Array.from({ length: daysInMonth }).map((_, i) => {
-              const day = i + 1
-              const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-              const dayShows = showsByDate[dateStr] || []
-              const isToday = dateStr === today
-              return (
-                <div key={day} style={{
-                  padding: '4px 2px', borderRadius: 'var(--r-sm)', minHeight: 36, textAlign: 'center',
-                  background: dayShows.length > 0 ? '#eab30810' : isToday ? 'var(--surface-2)' : 'transparent',
-                  border: isToday ? '1px solid var(--accent)' : dayShows.length > 0 ? '1px solid #eab30830' : '1px solid transparent',
-                }}>
-                  <div style={{
-                    fontSize: 11,
-                    fontWeight: isToday ? 700 : dayShows.length > 0 ? 600 : 400,
-                    color: dayShows.length > 0 ? '#eab308' : isToday ? 'var(--accent)' : 'var(--text-dim)',
-                  }}>{day}</div>
-                  {dayShows.length > 0 && (
-                    <div style={{ fontSize: 8, color: '#eab308', fontWeight: 700, lineHeight: 1 }}>
-                      {dayShows.length > 2 ? `${dayShows.length}*` : dayShows.map(s => s.artistName.slice(0, 3)).join(' ')}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
+          <button className="ics-btn" onClick={exportIcs} disabled={!items.length}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2ZM4 9h16M9 3v3M15 3v3" /></svg>
+            Export .ics
+          </button>
         </div>
-      )}
+
+        {items.length === 0 && (
+          <div className="empty">
+            <div className="empty-ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--sec-tracked)" strokeWidth="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg></div>
+            <div className="empty-title">No tracked shows yet</div>
+            <div className="empty-sub">Tap the star on any show to track it here.</div>
+          </div>
+        )}
+
+        {view === 'list' && items.length > 0 && (
+          <div className="tracked-list">
+            {items.map(s => (
+              <div className="tracked-row" key={s.id}>
+                <div className="tr-date">
+                  <span className="trd-mon">{fmtMon(s.date)}</span>
+                  <span className="trd-day">{fmtDay(s.date)}</span>
+                </div>
+                <div className="tr-info">
+                  <b>{s.artistName}</b>
+                  <span>{s.venueName || 'TBD'} &middot; {fmtTime(s.date)}</span>
+                </div>
+                <div className="tr-actions">
+                  {s.ticketUrl && <a href={s.ticketUrl} target="_blank" rel="noopener noreferrer" className="tix-btn sm">Tickets<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" /></svg></a>}
+                  <button className="star-btn on" onClick={() => toggleTrackedEvent(s)} title="Unstar">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--sec-tracked)" stroke="var(--sec-tracked)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {view === 'calendar' && (
+          <div className="calendar">
+            <div className="cal-head">
+              <button className="icon-btn" onClick={() => setCursor(new Date(y, m - 1, 1))}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 6l-6 6 6 6" /></svg></button>
+              <span className="cal-title">{moNm[m]} {y}</span>
+              <button className="icon-btn" onClick={() => setCursor(new Date(y, m + 1, 1))}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg></button>
+            </div>
+            <div className="cal-grid cal-dow">{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => <span key={i}>{d}</span>)}</div>
+            <div className="cal-grid">
+              {cells.map((d, i) => {
+                const has = d && byDay[d]
+                const isToday = d && today.getFullYear() === y && today.getMonth() === m && today.getDate() === d
+                return (
+                  <div key={i} className={`cal-cell ${d ? '' : ' empty'} ${isToday ? ' today' : ''}`}>
+                    {d && <span className="cc-num">{d}</span>}
+                    {has && <span className="cc-dots">{byDay[d]!.slice(0, 3).map((_, j) => <i key={j} style={{ background: 'var(--sec-tracked)' }} />)}</span>}
+                  </div>
+                )
+              })}
+            </div>
+            <div className="cal-upcoming">
+              {items.filter(s => { const d = new Date(s.date); return d.getFullYear() === y && d.getMonth() === m }).map(s => (
+                <div className="cal-up-row" key={s.id}>
+                  <span className="cur-day" style={{ color: 'var(--sec-tracked)' }}>{fmtDay(s.date)}</span>
+                  <div><b>{s.artistName}</b><span>{s.venueName || 'TBD'}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <NavDock />
     </div>
   )
 }

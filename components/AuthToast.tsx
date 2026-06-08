@@ -51,7 +51,7 @@ export default function AuthToast() {
         boxShadow: 'var(--shadow-md)',
         maxWidth: 360,
         animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        fontFamily: 'Outfit, sans-serif',
+        fontFamily: 'var(--font-body), sans-serif',
         fontSize: 13,
         color: 'var(--text)',
       }}

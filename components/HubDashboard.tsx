@@ -68,9 +68,9 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '48px 20px 20px' }}>
 
         <header style={{ marginBottom: 40, animation: 'fadeUp 0.6s cubic-bezier(0.16,1,0.3,1)' }}>
-          <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 11, color: 'var(--home-primary)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>ShowFinder</p>
-          <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 40, color: 'var(--text)', letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: 10 }}>{greeting}</h1>
-          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, color: 'var(--text-muted)', maxWidth: 460, lineHeight: 1.6 }}>
+          <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 11, color: 'var(--home-primary)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 12 }}>ShowFinder</p>
+          <h1 style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 800, fontSize: 40, color: 'var(--text)', letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: 10 }}>{greeting}</h1>
+          <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 15, color: 'var(--text-muted)', maxWidth: 460, lineHeight: 1.6 }}>
             Concerts from your favorite artists, all in one place.
           </p>
         </header>
@@ -89,8 +89,8 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
             }}
           >
             <div>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--text)', marginBottom: 4 }}>{artistCount}</p>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>artists tracked via Last.fm</p>
+              <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 22, color: 'var(--text)', marginBottom: 4 }}>{artistCount}</p>
+              <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>artists tracked via Last.fm</p>
             </div>
             <button onClick={gotoArtists} className="btn-ghost" style={{ padding: '8px 18px', fontSize: 13, color: 'var(--artists-primary)', border: '1px solid var(--artists-primary)', borderRadius: 8 }}>
               View
@@ -100,15 +100,15 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
 
         {!isLoggedIn && (
           <div className="card" style={{ padding: 24, marginBottom: 24, textAlign: 'center', animation: 'fadeUp 0.6s 0.1s cubic-bezier(0.16,1,0.3,1) both' }}>
-            <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>Connect Last.fm to get started</p>
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>We'll find shows for the artists you already listen to.</p>
+            <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 16, color: 'var(--text)', marginBottom: 6 }}>Connect Last.fm to get started</p>
+            <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>We'll find shows for the artists you already listen to.</p>
             <button onClick={() => router.push('/auth')} className="btn-primary" style={{ padding: '10px 22px', fontSize: 13 }}>Get started</button>
           </div>
         )}
 
         <div style={{ marginBottom: 24, animation: 'fadeUp 0.6s 0.2s cubic-bezier(0.16,1,0.3,1) both' }}>
-          <h2 className="section-label" style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 20, color: 'var(--text)', marginBottom: 6, letterSpacing: '-0.5px' }}>Set your location</h2>
-          <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>We'll find shows within touring distance.</p>
+          <h2 className="section-label" style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 20, color: 'var(--text)', marginBottom: 6, letterSpacing: '-0.5px' }}>Set your location</h2>
+          <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>We'll find shows within touring distance.</p>
         </div>
 
         <div style={{ animation: 'fadeUp 0.6s 0.3s cubic-bezier(0.16,1,0.3,1) both', position: 'relative', zIndex: 50 }}>
@@ -148,12 +148,12 @@ export default function HubDashboard({ isLoggedIn, lastfmUser, savedLocation, ar
             }}
           >
             <div style={{ flex: 1, padding: '12px 16px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>Tracking</p>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{artistCount} {artistCount === 1 ? 'artist' : 'artists'}</p>
+              <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>Tracking</p>
+              <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{artistCount} {artistCount === 1 ? 'artist' : 'artists'}</p>
             </div>
             <div style={{ flex: 1, padding: '12px 16px', borderRadius: 10, background: 'var(--surface-1)', border: '1px solid var(--border)' }}>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>Status</p>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{location ? 'Location set' : 'Set location to find shows'}</p>
+              <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 12, color: 'var(--text-dim)', marginBottom: 4 }}>Status</p>
+              <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 18, color: 'var(--text)' }}>{location ? 'Location set' : 'Set location to find shows'}</p>
             </div>
           </div>
         )}

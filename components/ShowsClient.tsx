@@ -12,18 +12,21 @@ interface Props {
 
 const CACHE_KEY = 'showfinder_shows_cache'
 const CACHE_TTL_MS = 30 * 60 * 1000
-
 type SortKey = 'date' | 'artist' | 'price' | 'distance' | 'relevance'
 type SourceFilter = 'all' | EventSource
 
-function dateLabel(iso: string): string {
-  const d = new Date(iso)
-  const now = new Date(); now.setHours(0, 0, 0, 0)
-  const diff = (d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  if (diff < 0) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  if (diff < 7) return d.toLocaleDateString('en-US', { weekday: 'short' }) + ` · ${Math.round(diff)}d`
-  if (diff < 30) return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const SORTS = [
+  { value: 'date', label: 'Date' },
+  { value: 'artist', label: 'Artist' },
+  { value: 'price', label: 'Price' },
+  { value: 'distance', label: 'Distance' },
+  { value: 'relevance', label: 'Relevance' },
+]
+
+const SOURCES: Record<string, { label: string; short: string; color: string }> = {
+  ticketmaster: { label: 'Ticketmaster', short: 'TM', color: '#5a7dff' },
+  bandsintown: { label: 'Bandsintown', short: 'BIT', color: '#22c993' },
+  songkick: { label: 'Songkick', short: 'SK', color: '#ff5a5f' },
 }
 
 function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
@@ -34,35 +37,52 @@ function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: 
   return 2 * R * Math.asin(Math.sqrt(h))
 }
 
+function fmtDow(d: string) { return new Date(d).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase() }
+function fmtMon(d: string) { return new Date(d).toLocaleDateString('en-US', { month: 'short' }).toUpperCase() }
+function fmtDay(d: string) { return new Date(d).getDate() }
+function fmtTime(d: string) {
+  const dt = new Date(d); let h = dt.getHours(); const m = dt.getMinutes()
+  const ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12
+  return `${h}:${String(m).padStart(2, '0')} ${ap}`
+}
+
+function SourceBadge({ source }: { source: string }) {
+  const s = SOURCES[source]
+  if (!s) return null
+  return <span className="src-badge" style={{ color: s.color, borderColor: s.color + '55', background: s.color + '14' }}>{s.short}</span>
+}
+
+function StatusDot({ source, ts }: { source: 'cache' | 'api' | 'client' | null; ts: number | null }) {
+  const [, force] = useState(0)
+  useEffect(() => { const id = setInterval(() => force(x => x + 1), 30_000); return () => clearInterval(id) }, [])
+  if (!ts) return null
+  const ageMin = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
+  const color = source === 'api' ? '#3ddc91' : source === 'cache' ? '#f5a623' : 'var(--faint)'
+  return <span className="status-dot" style={{ background: color }} title={source === 'api' ? 'Live' : source === 'cache' ? 'Cached' : 'Local cache'} />
+}
+
 export default function ShowsClient({ initialLocation, initialHubs, initialArtistNames }: Props) {
   const { settings, toggleTrackedEvent } = useSettings()
   const [location, setLocation] = useState<UserLocation>(initialLocation)
-  // All hubs we know about (from server + location API). Used for the toggle UI.
   const [allHubs, setAllHubs] = useState<TouringHub[]>(initialHubs)
-  // Which of those hubs the user has enabled for this search.
   const [enabledHubs, setEnabledHubs] = useState<Set<string>>(() => new Set(initialHubs.map(h => h.id)))
-  const [artistNames, setArtistNames] = useState<string[]>(() => {
+  const [artistNames] = useState<string[]>(() => {
     if (initialArtistNames.length) return initialArtistNames
     if (typeof window === 'undefined') return []
-    try {
-      const stored = localStorage.getItem('lastShowsArtists')
-      if (stored) return JSON.parse(stored) as string[]
-    } catch {}
+    try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
     return []
   })
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
-  // 'cache' = served from server cache; 'api' = live API fetch; null = unknown / client cache
   const [dataSource, setDataSource] = useState<'cache' | 'api' | 'client' | null>(null)
   const [lastFetchAt, setLastFetchAt] = useState<number | null>(null)
   const [sort, setSort] = useState<SortKey>('date')
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all')
   const [cityFilter, setCityFilter] = useState<string>('all')
-  const [page, setPage] = useState(1)
-  const PAGE_SIZE = 25
+  const [openFilter, setOpenFilter] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
 
-  // On mount, hydrate from localStorage if no URL params were given.
   useEffect(() => {
     if (typeof window === 'undefined') return
     let mounted = true
@@ -72,7 +92,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
       const stored = localStorage.getItem('lastShowsLocation')
       if (stored) {
         savedLoc = JSON.parse(stored)
-        if (savedLoc && isFinite(savedLoc.latitude) && isFinite(savedLoc.longitude) && (savedLoc.latitude !== 0 || savedLoc.longitude !== 0)) {
+        if (savedLoc && isFinite(savedLoc.latitude) && isFinite(savedLoc.longitude)) {
           setLocation({ city: savedLoc.city, region: savedLoc.region, country: savedLoc.country || 'US', latitude: savedLoc.latitude, longitude: savedLoc.longitude })
           if (Array.isArray(savedLoc.hubs)) savedHubIds = savedLoc.hubs
         }
@@ -81,579 +101,230 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     const lat = savedLoc?.latitude ?? initialLocation.latitude
     const lng = savedLoc?.longitude ?? initialLocation.longitude
 
-    // Check the client cache synchronously before doing any network work.
     try {
       const raw = localStorage.getItem(CACHE_KEY)
       if (raw && savedLoc) {
         const { ts, data, locKey } = JSON.parse(raw)
         const cur = `${savedLoc.latitude},${savedLoc.longitude}|${savedHubIds.slice().sort().join(',')}|${artistNames.slice().sort().join(',')}`
         if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
-          setShows(data.shows ?? [])
-          setArtists(data.artists ?? [])
-          setLoading(false)
-          setDataSource('client')
-          setLastFetchAt(ts)
-          return
+          setShows(data.shows ?? []); setArtists(data.artists ?? []); setLoading(false); setDataSource('client'); setLastFetchAt(ts); return
         }
       }
     } catch {}
 
-    // Fetch the suggested hubs and then load shows with the full hub list.
-    // This way the first request always includes the recommended tour hubs
-    // even if the user hasn't manually picked any yet.
     fetch('/api/location?lat=' + lat + '&lng=' + lng)
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (!mounted || !d) {
-          loadShows(savedLoc, savedHubIds)
-          return
-        }
-        // "nearHubs" are the close ones (~350mi) — default-enabled.
-        // "suggestedHubs" includes more distant ones (~600mi) — shown in UI but not enabled.
+        if (!mounted || !d) { loadShows(savedLoc, []); return }
         const suggested: TouringHub[] = Array.isArray(d.suggestedHubs) ? d.suggestedHubs : []
         const near: TouringHub[] = Array.isArray(d.nearHubs) ? d.nearHubs : []
         if (suggested.length) {
           setAllHubs(suggested)
           const nearIds = new Set(near.map(h => h.id))
-          // Only re-enable saved hubs that are within the near radius (≤350mi).
-          // Distant hubs like Nashville must be manually toggled on each session.
-          const initialEnabled = savedHubIds.length
-            ? new Set(savedHubIds.filter(id => nearIds.has(id)))
-            : new Set(near.map(h => h.id))
+          const initialEnabled = savedHubIds.length ? new Set(savedHubIds.filter(id => nearIds.has(id))) : new Set(near.map(h => h.id))
           setEnabledHubs(initialEnabled)
-          const hubIdsToUse = initialEnabled.size > 0 ? Array.from(initialEnabled) : near.map(h => h.id)
-          loadShows(savedLoc, hubIdsToUse)
+          loadShows(savedLoc, initialEnabled.size > 0 ? Array.from(initialEnabled) : near.map(h => h.id))
         } else {
           loadShows(savedLoc, near.map(h => h.id))
         }
       })
-      .catch(() => {
-        if (mounted) loadShows(savedLoc, [])
-      })
+      .catch(() => { if (mounted) loadShows(savedLoc, []) })
     return () => { mounted = false }
   }, [])
 
   async function loadShows(savedLocOverride?: any, savedHubIdsOverride?: string[]) {
     let hubIdsToSend: string[]
-    if (savedHubIdsOverride && savedHubIdsOverride.length) {
-      // First load: caller provides the exact hub list to use.
-      hubIdsToSend = savedHubIdsOverride
-    } else {
-      // Subsequent loads: use the user's enabled hubs filtered by valid hub IDs.
-      const validHubIds = new Set(allHubs.map(h => h.id))
-      hubIdsToSend = Array.from(enabledHubs).filter(id => validHubIds.has(id))
-    }
-    return loadShowsWithHubs(new Set(hubIdsToSend), savedLocOverride)
-  }
-
-  async function loadShowsWithHubs(hubIds: Set<string>, savedLocOverride?: any) {
+    if (savedHubIdsOverride && savedHubIdsOverride.length) { hubIdsToSend = savedHubIdsOverride }
+    else { const valid = new Set(allHubs.map(h => h.id)); hubIdsToSend = Array.from(enabledHubs).filter(id => valid.has(id)) }
     setLoading(true)
-    const locForUrl = savedLocOverride && isFinite(savedLocOverride.latitude) ? {
-      city: savedLocOverride.city, region: savedLocOverride.region, country: savedLocOverride.country || 'US',
-      latitude: savedLocOverride.latitude, longitude: savedLocOverride.longitude,
-    } : location
-    const hubIdsToSend = Array.from(hubIds)
+    const loc = savedLocOverride && isFinite(savedLocOverride.latitude) ? { latitude: savedLocOverride.latitude, longitude: savedLocOverride.longitude, city: savedLocOverride.city, region: savedLocOverride.region, country: savedLocOverride.country || 'US' } : location
     const url = new URL('/api/shows', window.location.origin)
-    url.searchParams.set('lat', String(locForUrl.latitude))
-    url.searchParams.set('lng', String(locForUrl.longitude))
-    url.searchParams.set('city', locForUrl.city)
-    if (locForUrl.region) url.searchParams.set('region', locForUrl.region)
+    url.searchParams.set('lat', String(loc.latitude)); url.searchParams.set('lng', String(loc.longitude)); url.searchParams.set('city', loc.city)
+    if (loc.region) url.searchParams.set('region', loc.region)
     if (hubIdsToSend.length) url.searchParams.set('hubs', hubIdsToSend.join(','))
     if (artistNames.length) url.searchParams.set('artists', artistNames.join(','))
     const res = await fetch(url.toString())
     const data = await res.json()
-    setShows(data.shows ?? [])
-    setArtists(data.artists ?? [])
-    setLoading(false)
-    setLastFetchAt(Date.now())
+    setShows(data.shows ?? []); setArtists(data.artists ?? []); setLoading(false); setLastFetchAt(Date.now())
     setDataSource(data.fromCache ? 'cache' : 'api')
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${locForUrl.latitude},${locForUrl.longitude}|${hubIdsToSend.sort().join(',')}|${artistNames.slice().sort().join(',')}` })) } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${loc.latitude},${loc.longitude}|${hubIdsToSend.sort().join(',')}|${artistNames.slice().sort().join(',')}` })) } catch {}
   }
 
-  function refresh() {
-    try { localStorage.removeItem(CACHE_KEY) } catch {}
-    const validHubIds = new Set(allHubs.map(h => h.id))
-    const next = new Set(Array.from(enabledHubs).filter(id => validHubIds.has(id)))
-    loadShowsWithHubs(next)
-  }
+  function refresh() { try { localStorage.removeItem(CACHE_KEY) } catch {}; loadShows() }
 
   function toggleHub(id: string) {
-    const next = new Set(enabledHubs)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setEnabledHubs(next)
-    try { localStorage.removeItem(CACHE_KEY) } catch {}
-    setTimeout(() => loadShowsWithHubs(next), 0)
+    const next = new Set(enabledHubs); next.has(id) ? next.delete(id) : next.add(id)
+    setEnabledHubs(next); try { localStorage.removeItem(CACHE_KEY) } catch {}; setTimeout(() => loadShows(), 0)
   }
 
-  function onLocationChange(loc: UserLocation, h: TouringHub[]) {
-    setLocation(loc); setAllHubs(h); setPage(1)
-    // Enable all suggested hubs by default for the new location.
-    const next = new Set(h.map(x => x.id))
-    setEnabledHubs(next)
-    try { localStorage.removeItem(CACHE_KEY) } catch {}
-    setTimeout(() => loadShowsWithHubs(next), 0)
+  function copyLink(id: string) {
+    setCopiedId(id)
+    navigator.clipboard?.writeText('https://showfinder.app/s/' + id).catch(() => {})
+    setTimeout(() => setCopiedId(c => c === id ? null : c), 1600)
   }
 
-  // Map artist name -> relevance score (lower index = more relevant)
-  const artistScore = useMemo(() => {
-    const m = new Map<string, number>()
-    artists.forEach((a, i) => m.set(a.name.toLowerCase(), i))
-    return m
-  }, [artists])
+  const artistScore = useMemo(() => { const m = new Map<string, number>(); artists.forEach((a, i) => m.set(a.name.toLowerCase(), i)); return m }, [artists])
+  const cities = useMemo(() => { const s = new Set<string>(); shows.forEach(show => { if (show.venue?.city) s.add(show.venue.city) }); return ['all', ...Array.from(s).sort()] }, [shows])
 
-  const cities = useMemo(() => {
-    const s = new Set<string>()
-    shows.forEach(show => { if (show.venue?.city) s.add(show.venue.city) })
-    return Array.from(s).sort()
-  }, [shows])
+  let filtered = shows.filter(s => {
+    if (sourceFilter !== 'all' && s.source !== sourceFilter) return false
+    if (cityFilter !== 'all' && s.venue?.city !== cityFilter) return false
+    return true
+  })
+  type ShowWithDist = Show & { _dist: number }
+  const withDist: ShowWithDist[] = filtered.map(s => ({ ...s, _dist: s.venue?.latitude != null ? haversineMi(location, { latitude: s.venue.latitude, longitude: s.venue.longitude }) : Infinity }))
+  const cmp: Record<SortKey, (a: any, b: any) => number> = {
+    date: (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    artist: (a, b) => a.artistName.localeCompare(b.artistName),
+    price: (a, b) => (a.priceRange?.min ?? Infinity) - (b.priceRange?.min ?? Infinity),
+    distance: (a, b) => a._dist - b._dist,
+    relevance: (a, b) => { const ar = artistScore.get(a.artistName.toLowerCase()) ?? 999; const br = artistScore.get(b.artistName.toLowerCase()) ?? 999; return ar !== br ? ar - br : new Date(a.date).getTime() - new Date(b.date).getTime() },
+  }
+  withDist.sort(cmp[sort])
 
-  // Build "presales coming up" list — events whose public sale or any presale starts in the future (within 14d)
-  const upcomingPresales = useMemo(() => {
-    const now = Date.now()
-    const horizon = now + 14 * 24 * 60 * 60 * 1000
-    const out: { show: Show; saleAt: number; saleName: string }[] = []
-    for (const s of shows) {
-      const candidates: { at: number; name: string }[] = []
-      if (s.publicOnsaleAt) {
-        const at = new Date(s.publicOnsaleAt).getTime()
-        if (at > now && at <= horizon) candidates.push({ at, name: 'Public sale' })
-      }
-      for (const p of s.presales ?? []) {
-        const at = new Date(p.startDateTime).getTime()
-        if (at > now && at <= horizon) candidates.push({ at, name: p.name })
-      }
-      if (candidates.length === 0) continue
-      candidates.sort((a, b) => a.at - b.at)
-      out.push({ show: s, saleAt: candidates[0].at, saleName: candidates[0].name })
-    }
-    return out.sort((a, b) => a.saleAt - b.saleAt)
-  }, [shows])
+  // Grouping
+  const groups: Record<string, ShowWithDist[]> = {}
+  const groupKey = (s: any) => {
+    if (sort === 'date') { const diff = Math.ceil((new Date(s.date).getTime() - Date.now()) / 86400000); return diff <= 7 ? 'This week' : diff <= 14 ? 'Next week' : diff <= 31 ? 'This month' : 'Later' }
+    if (sort === 'artist') return s.artistName[0].toUpperCase()
+    const p = s.priceRange?.min; return p == null ? 'Price TBA' : p < 50 ? 'Under $50' : p < 80 ? '$50-$80' : '$80+'
+    if (sort === 'distance') return s._dist <= 15 ? 'Near you' : s._dist <= 120 ? 'Day trip' : 'Tour hubs'
+    return 'Results'
+  }
+  withDist.forEach(s => { const k = groupKey(s); (groups[k] = groups[k] || []).push(s) })
 
-  const filteredSorted = useMemo(() => {
-    let list = shows
-    if (sourceFilter !== 'all') list = list.filter(s => s.source === sourceFilter)
-    if (cityFilter !== 'all') list = list.filter(s => s.venue?.city === cityFilter)
-    const withDist = list.map(s => ({ ...s, _dist: s.venue?.latitude != null && s.venue?.longitude != null ? haversineMi(location, { latitude: s.venue.latitude, longitude: s.venue.longitude }) : Infinity }))
-    withDist.sort((a, b) => {
-      if (sort === 'date') return new Date(a.date).getTime() - new Date(b.date).getTime()
-      if (sort === 'artist') return a.artistName.localeCompare(b.artistName)
-      if (sort === 'price') return (a.priceRange?.min ?? Infinity) - (b.priceRange?.min ?? Infinity)
-      if (sort === 'distance') return a._dist - b._dist
-      if (sort === 'relevance') {
-        const ar = artistScore.get(a.artistName.toLowerCase()) ?? 999
-        const br = artistScore.get(b.artistName.toLowerCase()) ?? 999
-        if (ar !== br) return ar - br
-        return new Date(a.date).getTime() - new Date(b.date).getTime()
-      }
-      return 0
-    })
-    return withDist
-  }, [shows, sort, sourceFilter, cityFilter, location, artistScore])
-
-  const total = filteredSorted.length
-  const pageShows = filteredSorted.slice(0, page * PAGE_SIZE)
-  const hasMore = total > pageShows.length
-
-  // Group by the active sort key so section labels match what the user is sorting by.
-  const grouped = useMemo(() => {
-    type Item = typeof pageShows[number]
-    const buckets: { key: string; label: string; items: Item[] }[] = []
-    const indexOf: { [k: string]: number } = {}
-    function push(key: string, label: string, s: Item) {
-      if (key in indexOf) buckets[indexOf[key]].items.push(s)
-      else { indexOf[key] = buckets.length; buckets.push({ key, label, items: [s] }) }
-    }
-    for (const s of pageShows) {
-      if (sort === 'artist') {
-        push(s.artistName.toLowerCase(), s.artistName, s)
-      } else if (sort === 'price') {
-        const p = s.priceRange?.min
-        const key = p == null ? 'no-price' : p < 30 ? 'under-30' : p < 60 ? '30-60' : p < 100 ? '60-100' : p < 200 ? '100-200' : '200+'
-        const label = p == null ? 'Price TBA' : key === 'under-30' ? 'Under $30' : key === '30-60' ? '$30 – $60' : key === '60-100' ? '$60 – $100' : key === '100-200' ? '$100 – $200' : '$200+'
-        push(key, label, s)
-      } else if (sort === 'distance') {
-        const d = (s as any)._dist ?? Infinity
-        const key = !isFinite(d) ? 'far' : d < 50 ? 'under-50' : d < 100 ? '50-100' : d < 200 ? '100-200' : d < 400 ? '200-400' : '400+'
-        const label = key === 'under-50' ? 'Under 50 mi' : key === '50-100' ? '50 – 100 mi' : key === '100-200' ? '100 – 200 mi' : key === '200-400' ? '200 – 400 mi' : key === '400+' ? '400+ mi' : 'Distance unknown'
-        push(key, label, s)
-      } else if (sort === 'relevance') {
-        // Group by artist since relevance = artist rank.
-        push(s.artistName.toLowerCase(), s.artistName, s)
-      } else {
-        // Default: by date
-        const d = new Date(s.date)
-        const key = d.toDateString()
-        push(key, d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }), s)
-      }
-    }
-    return buckets
-  }, [pageShows, sort])
-
-  const filtersOpen = sourceFilter !== 'all' || cityFilter !== 'all' || sort !== 'date'
+  const presales = shows.filter(s => s.publicOnsaleAt || (s.presales && s.presales.length > 0))
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 120 }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 8, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
-          <div>
-            <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 32, color: 'var(--text)', letterSpacing: '-1px', marginBottom: 4 }}>Shows</h1>
-            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-muted)' }}>
-              {total} {total === 1 ? 'show' : 'shows'} near {location.city}{enabledHubs.size > 1 ? ` +${enabledHubs.size - 1}` : ''}
-            </p>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {dataSource && lastFetchAt && <StatusDot source={dataSource} ts={lastFetchAt} />}
-            <button onClick={refresh} className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}>Refresh</button>
-          </div>
-        </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', paddingBottom: 100, position: 'relative' }}>
+      <div className="page">
+        <header className="page-head">
+          <h1 className="page-title">Shows</h1>
+          <div className="head-status"><StatusDot source={dataSource} ts={lastFetchAt} />Updated</div>
+        </header>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginBottom: 24 }}>
-          <div>
-            <div className="section-label" style={{ marginBottom: 8 }}>Sort by</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {([['date','Date'],['artist','Artist'],['price','Price'],['distance','Distance'],['relevance','Relevance']] as [SortKey, string][]).map(([val, label]) => (
-                <button key={val} onClick={() => setSort(val)} className={sort === val ? 'chip active' : 'chip'}>{label}</button>
+        {settings.showPresale && presales.length > 0 && (
+          <section className="presale-banner">
+            <div className="pb-head">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6ZM10 19a2 2 0 0 0 4 0" /></svg>
+              Presales opening soon
+            </div>
+            <div className="pb-list">
+              {presales.slice(0, 3).map(s => (
+                <div className="pb-row" key={s.id}>
+                  <div className="pb-info"><b>{s.artistName}</b><span>{s.venue?.name}</span></div>
+                  {s.publicOnsaleAt && (
+                    <span className="cd-compact">{new Date(s.publicOnsaleAt) > new Date() ? `Opens ${new Date(s.publicOnsaleAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'On sale'}</span>
+                  )}
+                </div>
               ))}
             </div>
-          </div>
+          </section>
+        )}
 
-          <div className="divider" />
-
-          <div>
-            <div className="section-label" style={{ marginBottom: 8 }}>Source</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {(['all','bandsintown','ticketmaster','songkick'] as SourceFilter[]).map(s => (
-                <button key={s} onClick={() => setSourceFilter(s)} className={sourceFilter === s ? 'chip active' : 'chip'}>{s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}</button>
-              ))}
-            </div>
-          </div>
-
-          {allHubs.length > 0 && (
-            <>
-              <div className="divider" />
-              <div>
-                <div className="section-label" style={{ marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span>Tour hubs</span>
-                  <button
-                    onClick={() => {
-                      const next = enabledHubs.size === allHubs.length
-                        ? new Set<string>()
-                        : new Set(allHubs.map(h => h.id))
-                      setEnabledHubs(next)
-                      try { localStorage.removeItem(CACHE_KEY) } catch {}
-                      setTimeout(() => loadShowsWithHubs(next), 0)
-                    }}
-                    className="btn-ghost"
-                    style={{ padding: '2px 8px', fontSize: 10, fontFamily: 'Syne, sans-serif' }}
-                  >
-                    {enabledHubs.size === allHubs.length ? 'None' : 'All'}
-                  </button>
-                </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {allHubs.map(h => (
-                    <button
-                      key={h.id}
-                      onClick={() => toggleHub(h.id)}
-                      className={enabledHubs.has(h.id) ? 'chip active' : 'chip'}
-                      title={`${h.name} · ${h.region}${h.distanceMiles != null ? ` · ${h.distanceMiles} mi` : ''}`}
-                      style={{ opacity: enabledHubs.has(h.id) ? 1 : 0.45 }}
-                    >
-                      {h.name.replace(/, [A-Z]{2}$/, '')}
-                      {h.distanceMiles != null && (
-                        <span style={{ marginLeft: 5, opacity: 0.7, fontSize: 9, fontFamily: 'Outfit, sans-serif' }}>{h.distanceMiles}mi</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {cities.length > 1 && (
-            <>
-              <div className="divider" />
-              <div>
-                <div className="section-label" style={{ marginBottom: 8 }}>City</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  <button onClick={() => setCityFilter('all')} className={cityFilter === 'all' ? 'chip active' : 'chip'}>All</button>
-                  {cities.map(c => <button key={c} onClick={() => setCityFilter(c)} className={cityFilter === c ? 'chip active' : 'chip'}>{c}</button>)}
-                </div>
-              </div>
-            </>
-          )}
-
-          {filtersOpen && (
-            <button onClick={() => { setSort('date'); setSourceFilter('all'); setCityFilter('all') }} className="btn-ghost" style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 11 }}>Clear filters</button>
-          )}
-        </div>
-
-        {upcomingPresales.length > 0 && !loading && <PresaleCountdowns items={upcomingPresales} />}
-
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 96, animationDelay: `${i * 0.05}s` }} />)}
-          </div>
-        ) : pageShows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-dim)', fontFamily: 'Outfit, sans-serif', fontSize: 14 }}>
-            <p>No shows found.</p>
-            <p style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 8 }}>Try a different location or check back later.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {grouped.map(({ key, label, items }) => (
-              <section key={key}>
-                <div className="section-label" style={{ marginBottom: 8, animation: 'fadeUp 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
-                  {label}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {items.map((s, i) => {
-                    const rel = artistScore.get(s.artistName.toLowerCase())
-                    const isSaved = artists.find(a => a.name.toLowerCase() === s.artistName.toLowerCase() && a.source === 'manual')
-                    const isTopMatch = rel !== undefined && rel < 3
-                    const link = s.ticketUrl ?? s.bandsintownUrl ?? ''
-                    return (
-                      <div
-                        key={s.id}
-                        className="card"
-                        style={{
-                          display: 'flex',
-                          padding: 0,
-                          overflow: 'hidden',
-                          animation: `fadeUp 0.4s ${i * 0.03}s cubic-bezier(0.16,1,0.3,1) both`,
-                        }}
-                      >
-                        <a
-                          href={link || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: 'flex',
-                            flex: 1,
-                            padding: 16,
-                            gap: 14,
-                            textDecoration: 'none',
-                            color: 'inherit',
-                            minWidth: 0,
-                          }}
-                        >
-                          <div style={{
-                            width: 56, minWidth: 56, textAlign: 'center',
-                            padding: '6px 0',
-                            borderRight: '1px solid var(--border)',
-                            fontFamily: 'Syne, sans-serif', fontWeight: 700,
-                          }}>
-                            <div style={{ fontSize: 20, color: 'var(--text)', lineHeight: 1 }}>
-                              {new Date(s.date).getDate()}
-                            </div>
-                            <div style={{ fontSize: 9, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>
-                              {new Date(s.date).toLocaleDateString('en-US', { month: 'short' })}
-                            </div>
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                              {isTopMatch && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>TOP MATCH</span>}
-                              {isSaved && <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', border: '1px solid var(--accent)', borderRadius: 'var(--r-xs)', padding: '1px 6px', letterSpacing: 0.5 }}>SAVED</span>}
-                              <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>{s.source}</span>
-                            </div>
-                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, color: 'var(--text)', fontWeight: 600, marginBottom: 4, lineHeight: 1.3 }}>{s.artistName}</p>
-                            <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                              {s.venue?.name}{s.venue?.city ? ` · ${s.venue.city}` : ''}
-                            </p>
-                            {s._dist !== Infinity && (
-                              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)', marginTop: 4 }}>
-                                {Math.round(s._dist)} mi away
-                              </p>
-                            )}
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'space-between', gap: 4 }}>
-                            <span style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
-                              {new Date(s.date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-                            </span>
-                            {s.priceRange?.min != null && s.priceRange.min > 0 && (
-                              <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>${Math.round(s.priceRange.min)}</span>
-                            )}
-                          </div>
-                        </a>
-                        <button
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleTrackedEvent({ id: s.id, artistName: s.artistName, date: s.date, venueName: s.venue?.name, venueCity: s.venue?.city, ticketUrl: s.ticketUrl }) }}
-                          title={settings.trackedEvents.some(t => t.id === s.id) ? 'Unstar' : 'Star this show'}
-                          aria-label={settings.trackedEvents.some(t => t.id === s.id) ? 'Unstar' : 'Star'}
-                          style={{
-                            width: 40, minWidth: 40, background: 'transparent', border: 'none',
-                            borderLeft: '1px solid var(--border)',
-                            color: settings.trackedEvents.some(t => t.id === s.id) ? '#eab308' : 'var(--text-dim)',
-                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            transition: 'color 0.15s',
-                          }}
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill={settings.trackedEvents.some(t => t.id === s.id) ? '#eab308' : 'none'} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                        </button>
-                        <CopyLinkButton link={link} />
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            ))}
-            {hasMore && (
-              <button onClick={() => setPage(p => p + 1)} className="btn-ghost" style={{ padding: '12px 20px', fontSize: 13, alignSelf: 'center' }}>
-                Show {Math.min(PAGE_SIZE, total - pageShows.length)} more
+        {settings.showsFilters.sort && (
+          <div className="filter-bar">
+            <button className={`pill ${openFilter === 'sort' ? 'active' : ''}`} onClick={() => setOpenFilter(openFilter === 'sort' ? null : 'sort')}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l-3 3M17 20l3-3" /></svg>
+              <span className="pill-label">Sort: <b>{SORTS.find(x => x.value === sort)?.label}</b></span>
+            </button>
+            <button className={`pill ${openFilter === 'source' ? 'active' : ''}`} onClick={() => setOpenFilter(openFilter === 'source' ? null : 'source')}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8Z" /></svg>
+              <span className="pill-label">Source: <b>{sourceFilter === 'all' ? 'All' : SOURCES[sourceFilter]?.short}</b></span>
+            </button>
+            {cities.length > 2 && (
+              <button className={`pill ${openFilter === 'city' ? 'active' : ''}`} onClick={() => setOpenFilter(openFilter === 'city' ? null : 'city')}>
+                <span className="pill-label">City: <b>{cityFilter === 'all' ? 'All' : cityFilter}</b></span>
               </button>
             )}
           </div>
         )}
-      </div>
+        {openFilter === 'sort' && (
+          <div className="filter-pop">{SORTS.map(o => (
+            <button key={o.value} className={`fp-opt ${sort === o.value ? 'on' : ''}`} onClick={() => { setSort(o.value as SortKey); setOpenFilter(null) }}>{o.label}{sort === o.value && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 7" /></svg>}</button>
+          ))}</div>
+        )}
+        {openFilter === 'source' && (
+          <div className="filter-pop">{['all', ...Object.keys(SOURCES)].map(o => (
+            <button key={o} className={`fp-opt ${sourceFilter === o ? 'on' : ''}`} onClick={() => { setSourceFilter(o as SourceFilter); setOpenFilter(null) }}>{o === 'all' ? 'All sources' : SOURCES[o]?.label}{sourceFilter === o && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 7" /></svg>}</button>
+          ))}</div>
+        )}
+        {openFilter === 'city' && (
+          <div className="filter-pop">{cities.map(o => (
+            <button key={o} className={`fp-opt ${cityFilter === o ? 'on' : ''}`} onClick={() => { setCityFilter(o); setOpenFilter(null) }}>{o === 'all' ? 'All cities' : o}{cityFilter === o && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5 10 17 19 7" /></svg>}</button>
+          ))}</div>
+        )}
 
+        {allHubs.length > 0 && (
+          <div className="hub-row">
+            <span className="hub-label">Tour hubs</span>
+            {allHubs.map(h => (
+              <button key={h.id} className={`hub-chip ${enabledHubs.has(h.id) ? 'on' : ''}`} onClick={() => toggleHub(h.id)}
+                style={enabledHubs.has(h.id) ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}}>
+                {h.name.split(',')[0]}{h.distanceMiles != null ? ` \u00B7 ${h.distanceMiles}mi` : ''}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 96 }} />)}
+          </div>
+        ) : withDist.length === 0 ? (
+          <div className="empty">
+            <div className="empty-ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z" /></svg></div>
+            <div className="empty-title">No shows match</div>
+            <div className="empty-sub">Try a different source, city, or hub toggle.</div>
+          </div>
+        ) : (
+          Object.entries(groups).map(([g, items]) => (
+            <section className="show-group" key={g}>
+              <div className="group-label">{g}<span>{items.length}</span></div>
+              <div className="show-list">
+                {items.map(s => {
+                  const isTracked = settings.trackedEvents.some(t => t.id === s.id)
+                  const link = s.ticketUrl ?? ''
+                  return (
+                    <div key={s.id} className={`show-card ${settings.showsCardLayout}`}>
+                      <div className="date-block">
+                        <span className="db-dow">{fmtDow(s.date)}</span>
+                        <span className="db-day">{fmtDay(s.date)}</span>
+                        <span className="db-mon">{fmtMon(s.date)}</span>
+                      </div>
+                      <div className="show-main">
+                        <div className="show-top">
+                          <h3 className="show-artist">{s.artistName}</h3>
+                          <button className={`star-btn ${isTracked ? 'on' : ''}`} onClick={() => toggleTrackedEvent({ id: s.id, artistName: s.artistName, date: s.date, venueName: s.venue?.name, venueCity: s.venue?.city, ticketUrl: s.ticketUrl })} title={isTracked ? 'Unstar' : 'Star'}>
+                            <svg width={settings.showsCardLayout === 'compact' ? 17 : 19} height={settings.showsCardLayout === 'compact' ? 17 : 19} viewBox="0 0 24 24" fill={isTracked ? 'var(--sec-tracked)' : 'none'} stroke={isTracked ? 'var(--sec-tracked)' : 'var(--faint)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+                          </button>
+                        </div>
+                        <div className="show-venue">{s.venue?.name}{s.venue?.city ? ` \u00B7 ${s.venue.city}` : ''}</div>
+                        <div className="show-meta">
+                          {s._dist !== Infinity && <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11ZM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /></svg>{Math.round(s._dist)}mi</span>}
+                          <span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></svg>{fmtTime(s.date)}</span>
+                          {s.priceRange?.min != null && s.priceRange.min > 0 && <span className="show-price">${Math.round(s.priceRange.min)}</span>}
+                          {settings.showsCardLayout !== 'compact' && <SourceBadge source={s.source} />}
+                        </div>
+                        {settings.showsCardLayout !== 'compact' && (
+                          <div className="show-actions">
+                            <button className="ghost-btn" onClick={() => copyLink(s.id)}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 14l6-6M8 8H6.5a3.5 3.5 0 0 0 0 7H9M15 16h1.5a3.5 3.5 0 0 0 0-7H15" /></svg>
+                              {copiedId === s.id ? 'Copied' : 'Copy link'}
+                            </button>
+                            {link && <a href={link} target="_blank" rel="noopener noreferrer" className="tix-btn">Tickets <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" /></svg></a>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
       <NavDock />
     </div>
-  )
-}
-
-function PresaleCountdowns({ items }: { items: { show: Show; saleAt: number; saleName: string }[] }) {
-  return (
-    <section style={{ marginBottom: 24, animation: 'fadeUp 0.5s cubic-bezier(0.16,1,0.3,1)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span className="section-label">Presales & onsales</span>
-        <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--accent)', background: 'var(--accent-soft)', borderRadius: 'var(--r-xs)', padding: '2px 6px', letterSpacing: 0.5 }}>LIVE</span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {items.map((it, i) => (
-          <PresaleCard key={`${it.show.id}-${it.saleName}-${it.saleAt}`} show={it.show} saleAt={it.saleAt} saleName={it.saleName} index={i} />
-        ))}
-      </div>
-      <div className="divider" style={{ marginTop: 24 }} />
-    </section>
-  )
-}
-
-function PresaleCard({ show, saleAt, saleName, index }: { show: Show; saleAt: number; saleName: string; index: number }) {
-  const [now, setNow] = useState<number>(() => Date.now())
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [])
-  const ms = Math.max(0, saleAt - now)
-  const days = Math.floor(ms / (24 * 60 * 60 * 1000))
-  const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000))
-  const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000))
-  const seconds = Math.floor((ms % (60 * 1000)) / 1000)
-  const started = ms === 0
-  const saleLocal = new Date(saleAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-  return (
-    <a
-      href={show.ticketUrl ?? show.bandsintownUrl ?? '#'}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="card"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 14, padding: 14,
-        textDecoration: 'none', color: 'inherit',
-        animation: `fadeUp 0.4s ${index * 0.05}s cubic-bezier(0.16,1,0.3,1) both`,
-      }}
-    >
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-          <span style={{
-            fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, letterSpacing: 0.5,
-            color: started ? 'var(--bg)' : 'var(--accent)',
-            background: started ? 'var(--accent)' : 'var(--accent-soft)',
-            borderRadius: 'var(--r-xs)', padding: '2px 6px',
-          }}>{started ? 'ON SALE NOW' : saleName.toUpperCase()}</span>
-          <span style={{ fontSize: 9, fontFamily: 'Syne, sans-serif', fontWeight: 700, color: 'var(--text-faint)', letterSpacing: 0.5, textTransform: 'uppercase' }}>TICKETMASTER</span>
-        </div>
-        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 15, color: 'var(--text)', fontWeight: 600, marginBottom: 2, lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{show.artistName}</p>
-        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 11, color: 'var(--text-dim)' }}>
-          {show.venue?.name}{show.venue?.city ? ` · ${show.venue.city}` : ''} · {new Date(show.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-        </p>
-        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 10, color: 'var(--text-faint)', marginTop: 3 }}>
-          {started ? 'Tickets available now' : `Opens ${saleLocal}`}
-        </p>
-      </div>
-      {!started && (
-        <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
-          {days > 0 && <CountUnit value={days} label="d" />}
-          <CountUnit value={hours} label="h" />
-          <CountUnit value={minutes} label="m" />
-          <CountUnit value={seconds} label="s" />
-        </div>
-      )}
-    </a>
-  )
-}
-
-function CountUnit({ value, label }: { value: number; label: string }) {
-  return (
-    <div style={{ textAlign: 'center', minWidth: 30 }}>
-      <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 18, color: 'var(--text)', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-        {String(value).padStart(2, '0')}
-      </div>
-      <div style={{ fontSize: 8, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: 1, marginTop: 2 }}>{label}</div>
-    </div>
-  )
-}
-
-function CopyLinkButton({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false)
-  async function onCopy(e: React.MouseEvent) {
-    e.preventDefault()
-    e.stopPropagation()
-    if (!link) return
-    try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    } catch {}
-  }
-  if (!link) return <div style={{ width: 1, borderLeft: '1px solid var(--border)' }} />
-  return (
-    <button
-      onClick={onCopy}
-      title={copied ? 'Copied!' : 'Copy ticket link'}
-      aria-label="Copy ticket link"
-      style={{
-        width: 44, minWidth: 44,
-        background: 'transparent',
-        border: 'none',
-        borderLeft: '1px solid var(--border)',
-        color: copied ? 'var(--accent)' : 'var(--text-dim)',
-        cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'Syne, sans-serif', fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-        textTransform: 'uppercase',
-        transition: 'color 0.15s, background 0.15s',
-      }}
-      onMouseEnter={(e) => { if (!copied) e.currentTarget.style.color = 'var(--text)'; e.currentTarget.style.background = 'var(--hover)' }}
-      onMouseLeave={(e) => { if (!copied) e.currentTarget.style.color = 'var(--text-dim)'; e.currentTarget.style.background = 'transparent' }}
-    >
-      {copied ? 'OK' : 'COPY'}
-    </button>
-  )
-}
-
-function StatusDot({ source, ts }: { source: 'cache' | 'api' | 'client'; ts: number }) {
-  const [, force] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => force(x => x + 1), 30_000)
-    return () => clearInterval(id)
-  }, [])
-  const ageMin = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
-  const ageStr = ageMin < 1 ? 'just now' : ageMin < 60 ? `${ageMin}m ago` : `${Math.floor(ageMin / 60)}h ago`
-  const color = source === 'api' ? 'var(--accent)' : source === 'cache' ? '#f59e0b' : 'var(--text-dim)'
-  const label = source === 'api' ? 'Live' : source === 'cache' ? 'Server cache' : 'Local cache'
-  const tooltip = `${label} · ${ageStr} · ${new Date(ts).toLocaleTimeString()}`
-  const live = source === 'api'
-  return (
-    <span
-      title={tooltip}
-      style={{
-        width: 10, height: 10, borderRadius: '50%',
-        background: color,
-        boxShadow: live ? `0 0 8px ${color}` : 'none',
-        cursor: 'default',
-        flexShrink: 0,
-        animation: live ? 'pulse-dot 2s ease-in-out infinite' : 'none',
-      }}
-    />
   )
 }

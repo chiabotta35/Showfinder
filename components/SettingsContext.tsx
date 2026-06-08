@@ -13,61 +13,78 @@ export interface TrackedShow {
 }
 
 export interface AppSettings {
-  // Theme (accent + colorway)
   theme: string
-  // Shows page
-  showsCardLayout: 'compact' | 'standard' | 'large'
+  showsCardLayout: 'compact' | 'comfy' | 'rich'
   showsFilters: { sort: boolean; source: boolean; city: boolean; hubs: boolean }
-  // Dashboard
-  dashboardSections: { quickStats: boolean; nextShow: boolean; artistCount: boolean }
-  // Artists
+  showPresale: boolean
+  dashboardSections: { quickStats: boolean; quickActions: boolean; topArtists: boolean }
   artistView: 'list' | 'grid'
-  // NavDock
   navdockTabs: string[]
-  navdockOrder: string[]
-  // Tracked events (individual shows, not artists)
   trackedEvents: TrackedShow[]
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'default',
-  showsCardLayout: 'standard',
+  theme: 'teal',
+  showsCardLayout: 'comfy',
   showsFilters: { sort: true, source: true, city: true, hubs: true },
-  dashboardSections: { quickStats: true, nextShow: true, artistCount: true },
+  showPresale: true,
+  dashboardSections: { quickStats: true, quickActions: true, topArtists: true },
   artistView: 'list',
-  navdockTabs: ['dashboard', 'artists', 'shows', 'discover', 'account'],
-  navdockOrder: ['dashboard', 'artists', 'shows', 'discover', 'account'],
+  navdockTabs: ['home', 'artists', 'shows', 'tracked', 'discover', 'account'],
   trackedEvents: [],
 }
 
 export const COLORWAYS = [
-  { id: 'default', name: 'Midnight', accent: '#3b82f6', bg: '#0a0a0f', surface: '#111118', surface2: '#1a1a24', surface3: '#222230', border: '#2a2a3a', text: '#f0f0f5', textSecondary: '#8888aa', textMuted: '#555570' },
-  { id: 'light', name: 'Daylight', accent: '#3b82f6', bg: '#f8f8fc', surface: '#ffffff', surface2: '#f0f0f5', surface3: '#e5e5ee', border: '#d5d5e0', text: '#1a1a2e', textSecondary: '#555570', textMuted: '#8888aa' },
-  { id: 'ocean', name: 'Ocean', accent: '#06b6d4', bg: '#0a1628', surface: '#0f1f35', surface2: '#152a42', surface3: '#1c3550', border: '#244560', text: '#e0f0ff', textSecondary: '#7ab8d8', textMuted: '#4a8aaa' },
-  { id: 'forest', name: 'Forest', accent: '#22c55e', bg: '#0a120a', surface: '#0f1f10', surface2: '#152a16', surface3: '#1c351d', border: '#244528', text: '#e0ffe0', textSecondary: '#7acc7a', textMuted: '#4a9a4a' },
-  { id: 'sunset', name: 'Sunset', accent: '#f97316', bg: '#120a08', surface: '#1f1210', surface2: '#2a1814', surface3: '#35201a', border: '#453025', text: '#fff0e0', textSecondary: '#d8a070', textMuted: '#aa7050' },
-  { id: 'lavender', name: 'Lavender', accent: '#a855f7', bg: '#100a14', surface: '#1a1020', surface2: '#22182c', surface3: '#2c2038', border: '#3a2c48', text: '#f0e0ff', textSecondary: '#b888d8', textMuted: '#8a5aaa' },
-  { id: 'rose', name: 'Rose', accent: '#ec4899', bg: '#120a10', surface: '#1f101a', surface2: '#2a1424', surface3: '#351c2e', border: '#45283a', text: '#ffe0f0', textSecondary: '#d870a8', textMuted: '#aa5080' },
-  { id: 'ember', name: 'Ember', accent: '#ef4444', bg: '#100808', surface: '#1c0e0e', surface2: '#261414', surface3: '#301c1c', border: '#402828', text: '#ffe0e0', textSecondary: '#d87070', textMuted: '#aa5050' },
+  { id: 'teal', name: 'Charcoal Teal', bg: '#0d1011', surface: '#15191b', surface2: '#1d2326', border: '#2a3236', text: '#eef2f3', dim: '#9aa6ab', faint: '#5e6a6f', accent: '#2dd4bf', accentInk: '#04201c' },
+  { id: 'amber', name: 'Espresso Amber', bg: '#100d0a', surface: '#1a1611', surface2: '#241e17', border: '#332a20', text: '#f4efe8', dim: '#ab9f90', faint: '#6f6354', accent: '#f5a623', accentInk: '#241600' },
+  { id: 'violet', name: 'Midnight Violet', bg: '#0c0c14', surface: '#15151f', surface2: '#1d1d2c', border: '#2a2a3d', text: '#edecf5', dim: '#9b9ab0', faint: '#5f5f78', accent: '#8b7cff', accentInk: '#120a2e' },
+  { id: 'neon', name: 'OLED Neon', bg: '#000000', surface: '#0c0e0c', surface2: '#141814', border: '#1f261f', text: '#eafaef', dim: '#8fa395', faint: '#566059', accent: '#46f08a', accentInk: '#022012' },
+  { id: 'coral', name: 'Warm Coral', bg: '#120e0d', surface: '#1c1614', surface2: '#261d1a', border: '#352824', text: '#f6efec', dim: '#b09b94', faint: '#736159', accent: '#ff6f5e', accentInk: '#2c0c07' },
+  { id: 'sky', name: 'Slate Sky', bg: '#0b0e12', surface: '#13171d', surface2: '#1a2029', border: '#283038', text: '#eaf0f6', dim: '#94a1b0', faint: '#5a6573', accent: '#4aa8ff', accentInk: '#04182e' },
+  { id: 'magenta', name: 'Plum Magenta', bg: '#110b10', surface: '#1a131a', surface2: '#241a24', border: '#342634', text: '#f4ecf3', dim: '#ad95ab', faint: '#71596f', accent: '#ff5db1', accentInk: '#2e0820' },
+  { id: 'lime', name: 'Forest Lime', bg: '#0b0f0b', surface: '#131913', surface2: '#1a221a', border: '#273227', text: '#edf4ea', dim: '#9aa994', faint: '#5f6c5a', accent: '#a3e635', accentInk: '#15230a' },
+  { id: 'rose', name: 'Graphite Rose', bg: '#0e0d0f', surface: '#171519', surface2: '#201d23', border: '#2e2a32', text: '#f1eef2', dim: '#a39ba8', faint: '#675f6c', accent: '#fb7185', accentInk: '#2c0810' },
+  { id: 'cyan', name: 'Navy Cyan', bg: '#080d11', surface: '#0f161c', surface2: '#151f27', border: '#223039', text: '#e8f3f7', dim: '#8fa3ad', faint: '#56666f', accent: '#22d3ee', accentInk: '#032027' },
+  { id: 'indigo', name: 'Carbon Indigo', bg: '#0b0c10', surface: '#131520', surface2: '#1a1d2e', border: '#272b40', text: '#ebedf6', dim: '#969ab4', faint: '#5b5f78', accent: '#6d7bff', accentInk: '#0c0f33' },
+  { id: 'gold', name: 'Mocha Gold', bg: '#0f0d09', surface: '#19150f', surface2: '#231d14', border: '#322a1d', text: '#f5f0e6', dim: '#aaa08c', faint: '#6f6552', accent: '#e8c468', accentInk: '#271d05' },
 ]
 
-function getThemeColors(id: string): Record<string, string> {
+function getThemeVars(id: string): Record<string, string> {
   const cw = COLORWAYS.find(c => c.id === id) ?? COLORWAYS[0]
   return {
-    '--accent': cw.accent,
-    '--accent-dim': cw.accent + 'cc',
-    '--accent-soft': cw.accent + '1a',
-    '--accent-glow': cw.accent + '40',
     '--bg': cw.bg,
-    '--surface-1': cw.surface,
-    '--surface-2': cw.surface2,
-    '--surface-3': cw.surface3,
+    '--surface': cw.surface,
+    '--surface2': cw.surface2,
+    '--surface3': cw.surface2,
     '--border': cw.border,
     '--text': cw.text,
-    '--text-secondary': cw.textSecondary,
-    '--text-muted': cw.textMuted,
-    '--text-dim': cw.textMuted,
-    '--text-faint': cw.textMuted + '80',
+    '--dim': cw.dim,
+    '--faint': cw.faint,
+    '--accent': cw.accent,
+    '--accent-ink': cw.accentInk,
+    '--accent-soft': cw.accent + '22',
+    '--accent-line': cw.accent + '44',
+    '--text-secondary': cw.dim,
+    '--text-muted': cw.faint,
+    '--text-dim': cw.faint,
+    '--text-faint': cw.faint + '60',
+    '--surface-1': cw.surface,
+    '--surface-2': cw.surface2,
+    '--surface-3': cw.surface2,
+    '--bg-elevated': cw.surface,
+    '--border-hover': cw.border,
+    '--border-strong': cw.border,
+    '--shows-primary': '#ff9a3c',
+    '--artists-primary': '#4aa8ff',
+    '--discover-primary': '#a78bfa',
+    '--home-primary': '#2dd4bf',
+    '--account-primary': '#9aa6ab',
+    '--sec-home': '#2dd4bf',
+    '--sec-artists': '#4aa8ff',
+    '--sec-shows': '#ff9a3c',
+    '--sec-tracked': '#facc15',
+    '--sec-discover': '#a78bfa',
+    '--sec-account': '#9aa6ab',
   }
 }
 
@@ -77,14 +94,22 @@ function loadSettings(): AppSettings {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw)
-      // Migrate legacy accentColor-only → new theme system
       if ('accentColor' in parsed && !parsed.theme) {
-        const match = COLORWAYS.find(c => c.accent === parsed.accentColor)
-        parsed.theme = match ? match.id : 'default'
+        parsed.theme = 'teal'
         delete parsed.accentColor
       }
-      // Migrate trackedArtists → trackedEvents (drop old artist data)
       if ('trackedArtists' in parsed) delete parsed.trackedArtists
+      if ('navdockOrder' in parsed) delete parsed.navdockOrder
+      // Migrate old card layout values
+      if (parsed.showsCardLayout === 'standard') parsed.showsCardLayout = 'comfy'
+      if (parsed.showsCardLayout === 'large') parsed.showsCardLayout = 'rich'
+      if (parsed.dashboardSections?.nextShow !== undefined) {
+        parsed.dashboardSections = {
+          quickStats: parsed.dashboardSections.quickStats ?? true,
+          quickActions: parsed.dashboardSections.quickActions ?? true,
+          topArtists: parsed.dashboardSections.topArtists ?? true,
+        }
+      }
       return { ...DEFAULT_SETTINGS, ...parsed }
     }
   } catch {}
@@ -98,7 +123,7 @@ function saveSettings(s: AppSettings) {
 interface SettingsCtx {
   settings: AppSettings
   update: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void
-  toggleTrackedEvent: (show: { id: string; artistName: string; date: string; venueName?: string; venueCity?: string; ticketUrl?: string }) => void
+  toggleTrackedEvent: (show: TrackedShow) => void
 }
 
 const SettingsContext = createContext<SettingsCtx>({
@@ -118,11 +143,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setMounted(true)
   }, [])
 
-  // Apply theme colors to CSS variables
   useEffect(() => {
     if (!mounted) return
     const root = document.documentElement
-    const vars = getThemeColors(settings.theme)
+    const vars = getThemeVars(settings.theme)
     for (const [k, v] of Object.entries(vars)) {
       root.style.setProperty(k, v)
     }
@@ -133,7 +157,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, [key]: value }))
   }, [])
 
-  const toggleTrackedEvent = useCallback((show: { id: string; artistName: string; date: string; venueName?: string; venueCity?: string; ticketUrl?: string }) => {
+  const toggleTrackedEvent = useCallback((show: TrackedShow) => {
     setSettings(prev => {
       const idx = prev.trackedEvents.findIndex(e => e.id === show.id)
       const tracked = idx >= 0

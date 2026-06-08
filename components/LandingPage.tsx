@@ -9,10 +9,10 @@ export default function LandingPage() {
       <div style={{ position: 'absolute', top: '-30%', left: '50%', transform: 'translateX(-50%)', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, var(--accent) 0%, transparent 70%)', opacity: 0.08, pointerEvents: 'none', filter: 'blur(80px)' }} />
 
       <div style={{ maxWidth: 680, textAlign: 'center', position: 'relative', zIndex: 1 }}>
-        <h1 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 50, color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 20, animation: 'fadeUp 0.6s 0.05s cubic-bezier(0.16,1,0.3,1) both' }}>
+        <h1 style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 800, fontSize: 50, color: 'var(--text)', letterSpacing: '-2px', lineHeight: 1.1, marginBottom: 20, animation: 'fadeUp 0.6s 0.05s cubic-bezier(0.16,1,0.3,1) both' }}>
           Live shows, zero guesswork
         </h1>
-        <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 40, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto', animation: 'fadeUp 0.6s 0.15s cubic-bezier(0.16,1,0.3,1) both' }}>
+        <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 40, maxWidth: 480, marginLeft: 'auto', marginRight: 'auto', animation: 'fadeUp 0.6s 0.15s cubic-bezier(0.16,1,0.3,1) both' }}>
           Concerts from your favorite artists, all in one place.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', animation: 'fadeUp 0.6s 0.25s cubic-bezier(0.16,1,0.3,1) both' }}>
@@ -32,8 +32,8 @@ export default function LandingPage() {
               <div style={{ width: 10, height: 10, borderRadius: '50%', background: color }} />
             </div>
             <div>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 4 }}>{name}</p>
-              <p style={{ fontFamily: 'Outfit, sans-serif', fontSize: 13, color: 'var(--text-secondary)' }}>{desc}</p>
+              <p style={{ fontFamily: 'var(--font-heading), sans-serif', fontWeight: 700, fontSize: 14, color: 'var(--text)', marginBottom: 4 }}>{name}</p>
+              <p style={{ fontFamily: 'var(--font-body), sans-serif', fontSize: 13, color: 'var(--text-secondary)' }}>{desc}</p>
             </div>
           </div>
         ))}
