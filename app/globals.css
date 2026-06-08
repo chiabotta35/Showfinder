@@ -456,7 +456,7 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 /* ========================= FAB ========================= */
 .fab-wrap {
   position: absolute;
-  bottom: 96px;
+  bottom: 90px;
   left: 0; right: 0;
   display: flex;
   justify-content: center;
@@ -972,39 +972,43 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 /* ========================= NAV DOCK ========================= */
 .navdock {
   position: fixed;
-  bottom: 0;
-  left: 0; right: 0;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 50;
   display: flex;
-  align-items: stretch;
-  justify-content: space-around;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  border-top: 1px solid var(--border);
-  padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
-  gap: 2px;
+  align-items: center;
+  gap: 4px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 6px 8px;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  box-shadow: 0 12px 40px -8px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
 }
 .nav-item {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 6px 2px;
+  gap: 3px;
+  padding: 8px 6px;
   position: relative;
-  border-radius: 12px;
+  border-radius: calc(var(--r-xl) - 6px);
   transition: 0.15s;
   cursor: pointer;
 }
 .nav-accent {
   position: absolute;
-  top: -8px;
+  top: 2px;
   left: 50%;
   transform: translateX(-50%);
-  width: 22px;
+  width: 18px;
   height: 3px;
-  border-radius: 0 0 3px 3px;
+  border-radius: 3px;
 }
 .nav-label { font-size: 10px; font-weight: 600; letter-spacing: 0.1px; }
 .nav-gear { max-width: 54px; }
@@ -1151,7 +1155,7 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 /* ========================= FLASH ========================= */
 .flash {
   position: fixed;
-  bottom: 104px;
+  bottom: 100px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
@@ -1196,4 +1200,21 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 /* ========================= RESPONSIVE ========================= */
 @media (max-width: 520px) {
   .page { padding: 8px 14px 130px; }
+}
+@media (min-width: 768px) {
+  .page {
+    max-width: 680px;
+    padding: 20px 24px 130px;
+    gap: 20px;
+  }
+  .page-title { font-size: 34px; }
+  .stat-row { gap: 12px; }
+  .artist-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 1024px) {
+  .page {
+    max-width: 780px;
+    padding: 28px 32px 130px;
+  }
+  .page-title { font-size: 38px; }
 }
