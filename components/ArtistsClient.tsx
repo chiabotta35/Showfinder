@@ -40,6 +40,7 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
   const [period, setPeriod] = useState<string>('6month')
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
   const [searching, setSearching] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
 
   useEffect(() => { loadArtists() }, [period])
 
@@ -98,6 +99,10 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
     }
   }
 
+  const filtered = query.trim()
+    ? artists.filter(a => a.name.toLowerCase().includes(query.toLowerCase()))
+    : artists
+
   return (
     <Shell route="artists" savedLocation={savedLocation} userName={lastfmUser?.displayName || 'User'}>
       <div className="page artists">
@@ -107,6 +112,14 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
             <div className="greeting" style={{ marginTop: 4 }}>{artists.length} artists synced{lastfmConnected ? ' · Last.fm' : ''}</div>
           </div>
         </header>
+
+        <div className="artist-search">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4" /></svg>
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search artists…" />
+          {query && <button className="loc-clear" onClick={() => setQuery('')} style={{ color: 'var(--faint)', cursor: 'pointer', background: 'none', border: 'none' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+          </button>}
+        </div>
 
         <div className="seg" style={{ width: 'fit-content' }}>
           {PERIODS.map(p => (
@@ -122,15 +135,13 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
           <div className="artist-grid">
             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 140, borderRadius: 'var(--radius)' }} />)}
           </div>
-        ) : artists.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <div className="empty">
-            <div className="empty-ico"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5"><path d="M16 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4ZM3 20a5 5 0 0 1 10 0M16 14a5 5 0 0 1 5 5" /></svg></div>
-            <div className="empty-title">No artists found</div>
-            <div className="empty-sub">Connect Last.fm or add artists manually.</div>
+            <div className="empty-title">No artists match &ldquo;{query}&rdquo;</div>
           </div>
         ) : (
           <div className="artist-grid">
-            {artists.map(a => (
+            {filtered.map(a => (
               <button key={a.name} className="artist-grid-card" onClick={() => searchArtist(a.name)}>
                 <Avatar name={a.name} size={64} />
                 <div className="agc-name">{a.name}</div>
