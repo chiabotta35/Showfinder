@@ -1,55 +1,20 @@
 import { getSession } from '@/lib/session'
-import { getUserById, getSavedArtists } from '@/lib/db'
-import { getTopArtists } from '@/lib/lastfm'
-import HubDashboard from '@/components/HubDashboard'
-
-const CACHE_TTL_MS = 10 * 60 * 1000
-const countCache = new Map<string, { count: number; ts: number }>()
+import { getUserById } from '@/lib/db'
+import ArtistsClient from '@/components/ArtistsClient'
 
 export default async function ArtistsPage() {
   const session = await getSession()
-  let lastfmUser: { username: string; displayName: string; scrobbleCount?: number } | null = null
-  let savedLocation: { city: string; region: string; lat: number; lng: number } | null = null
-  let isLoggedIn = false
-  let artistCount = 0
+  let lastfmUser = null, savedLocation = null, lastfmConnected = false
   if (session.userId) {
-    isLoggedIn = true
     const user = getUserById(session.userId)
     if (user) {
-      if (user.lastfmUsername) lastfmUser = { username: user.lastfmUsername, displayName: user.lastfmDisplayName ?? user.displayName ?? user.lastfmUsername, scrobbleCount: user.scrobbleCount }
-      if (user.lastLocation) savedLocation = { city: user.lastLocation.city, region: user.lastLocation.region, lat: user.lastLocation.lat, lng: user.lastLocation.lng }
-      const manualCount = getSavedArtists(session.userId).length
-      let lastfmCount = 0
-      if (user.lastfmUsername) {
-        const cached = countCache.get(user.lastfmUsername)
-        if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-          lastfmCount = cached.count
-        } else {
-          try {
-            const top = await getTopArtists(user.lastfmUsername, '6month', 100)
-            lastfmCount = top.length
-            countCache.set(user.lastfmUsername, { count: lastfmCount, ts: Date.now() })
-          } catch {}
-        }
-      }
-      artistCount = Math.max(manualCount, lastfmCount)
+      lastfmUser = { username: user.lastfmUsername ?? '', displayName: user.displayName ?? user.lastfmDisplayName ?? '' }
+      lastfmConnected = !!user.lastfmUsername
+      if (user.lastLocation) savedLocation = user.lastLocation
     }
   } else if (session.lastfm) {
-    lastfmUser = { username: session.lastfm.username, displayName: session.lastfm.displayName, scrobbleCount: session.lastfm.scrobbleCount }
-    if (session.lastfm.username) {
-      const cached = countCache.get(session.lastfm.username)
-      if (cached && Date.now() - cached.ts < CACHE_TTL_MS) {
-        artistCount = cached.count
-      } else {
-        try {
-          const top = await getTopArtists(session.lastfm.username, '6month', 100)
-          artistCount = top.length
-          countCache.set(session.lastfm.username, { count: artistCount, ts: Date.now() })
-        } catch {}
-      }
-    }
-  } else if (session.savedArtists) {
-    artistCount = session.savedArtists.length
+    lastfmUser = { username: session.lastfm.username, displayName: session.lastfm.displayName }
+    lastfmConnected = true
   }
-  return <HubDashboard isLoggedIn={isLoggedIn} lastfmUser={lastfmUser} savedLocation={savedLocation} artistCount={artistCount} />
+  return <ArtistsClient lastfmUser={lastfmUser} savedLocation={savedLocation} lastfmConnected={lastfmConnected} />
 }

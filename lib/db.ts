@@ -47,7 +47,7 @@ function migrate(db: Database.Database) {
   add('last_location_lat','REAL'); add('last_location_lng','REAL')
 }
 
-const CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 export function buildCacheKey(artistNames: string[], city: string, hubIds: string[]): string {
   const normalized = [...artistNames].sort().join(',') + city + [...hubIds].sort().join(',')
@@ -141,7 +141,7 @@ export function removeSavedArtist(userId: string, name: string) {
 // Cached Ticketmaster event results keyed by (artist, hubId). Survives server restarts
 // and is shared across requests, so toggling a hub on/off doesn't re-query TM for hubs
 // we've already pulled within the TTL window.
-const HUB_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+const HUB_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 export function buildHubCacheKey(artistName: string, hubId: string): string {
   return crypto.createHash('sha256').update(`${artistName.toLowerCase()}|${hubId}`).digest('hex').slice(0, 32)

@@ -57,9 +57,9 @@ function NavIcon({ name, color, active }: { name: string; color: string; active:
   )
 }
 
-function Brand() {
+function Brand({ onNav }: { onNav: (href: string) => void }) {
   return (
-    <div className="brand">
+    <button className="brand" onClick={() => onNav('/dashboard')}>
       <span className="brand-mark" style={{ background: 'var(--accent)' }}>
         <svg width="20" height="20" viewBox="0 0 20 20"><g fill="var(--accent-ink)">
           <rect x="3" y="8" width="3" height="9" rx="1.5" />
@@ -68,7 +68,7 @@ function Brand() {
         </g></svg>
       </span>
       <span className="brand-name">ShowFinder</span>
-    </div>
+    </button>
   )
 }
 
@@ -77,7 +77,7 @@ function Sidebar({ route, onNav, tabs, onSettings }: { route: string; onNav: (hr
   const visible = NAV.filter(n => tabs.includes(n.id) || alwaysShow.includes(n.id))
   return (
     <nav className="sitenav">
-      <Brand />
+      <Brand onNav={onNav} />
       <div className="nav-items">
         {visible.map(item => {
           const active = route === item.id
