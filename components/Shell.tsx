@@ -73,7 +73,8 @@ function Brand() {
 }
 
 function Sidebar({ route, onNav, tabs, onSettings }: { route: string; onNav: (href: string) => void; tabs: string[]; onSettings: () => void }) {
-  const visible = NAV.filter(n => tabs.includes(n.id))
+  const alwaysShow = ['tracked']
+  const visible = NAV.filter(n => tabs.includes(n.id) || alwaysShow.includes(n.id))
   return (
     <nav className="sitenav">
       <Brand />

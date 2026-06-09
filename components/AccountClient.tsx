@@ -2,7 +2,6 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Shell from './Shell'
-import { useSettings } from './SettingsContext'
 
 interface Props {
   user: { displayName: string; lastfmUsername: string; createdAt: string; city: string; region: string }
@@ -23,7 +22,6 @@ function Avatar({ name, size = 48 }: { name: string; size?: number }) {
 export default function AccountClient({ user, lastfmConnected }: Props) {
   const router = useRouter()
   const [connecting, setConnecting] = useState(false)
-  const { settings } = useSettings()
 
   async function disconnect() {
     if (!confirm('Disconnect Last.fm? Your saved artists will remain.')) return
@@ -75,7 +73,7 @@ export default function AccountClient({ user, lastfmConnected }: Props) {
           )}
         </div>
 
-        <div className="info-grid">
+        <div className="info-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <div className="info-tile">
             <span className="it-label">Home city</span>
             <b>{user.city || '—'}{user.region ? `, ${user.region}` : ''}</b>
@@ -84,19 +82,9 @@ export default function AccountClient({ user, lastfmConnected }: Props) {
             <span className="it-label">Member since</span>
             <b>{memberSince}</b>
           </div>
-          <div className="info-tile">
-            <span className="it-label">Theme</span>
-            <b style={{ textTransform: 'capitalize' }}>{settings.theme}</b>
-          </div>
-          <div className="info-tile">
-            <span className="it-label">Card layout</span>
-            <b style={{ textTransform: 'capitalize' }}>{settings.showsCardLayout}</b>
-          </div>
         </div>
 
         <div className="session-block">
-          <div className="sb-row"><span>Session</span><b>iron-session · secure</b></div>
-          <div className="sb-row"><span>Caching</span><b>30 min local · per-hub DB</b></div>
           <div className="sb-row"><span>Version</span><b>ShowFinder 2.4.0</b></div>
         </div>
 

@@ -29,6 +29,20 @@ const SOURCES: Record<string, { label: string; short: string; color: string }> =
   songkick: { label: 'Songkick', short: 'SK', color: '#ff5a5f' },
 }
 
+function Countdown({ target }: { target: string }) {
+  const [, force] = useState(0)
+  useEffect(() => { const id = setInterval(() => force(x => x + 1), 1000); return () => clearInterval(id) }, [])
+  const diff = new Date(target).getTime() - Date.now()
+  if (diff <= 0) return <span className="cd-compact" style={{ color: '#3ddc91' }}>On sale</span>
+  const d = Math.floor(diff / 86400000)
+  const h = Math.floor((diff % 86400000) / 3600000)
+  const m = Math.floor((diff % 3600000) / 60000)
+  const s = Math.floor((diff % 60000) / 1000)
+  if (d > 0) return <span className="cd-compact">{d}d {h}h {m}m</span>
+  if (h > 0) return <span className="cd-compact">{h}h {m}m {s}s</span>
+  return <span className="cd-compact">{m}m {s}s</span>
+}
+
 function haversineMi(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
   const R = 3959
   const dLat = (b.latitude - a.latitude) * Math.PI / 180
@@ -185,8 +199,8 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   // Grouping
   const groups: Record<string, ShowWithDist[]> = {}
   const groupKey = (s: any) => {
-    if (sort === 'date') { const diff = Math.ceil((new Date(s.date).getTime() - Date.now()) / 86400000); return diff <= 7 ? 'This week' : diff <= 14 ? 'Next week' : diff <= 31 ? 'This month' : 'Later' }
-    if (sort === 'artist') return s.artistName[0].toUpperCase()
+    if (sort === 'date') { return new Date(s.date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) }
+    if (sort === 'artist') return s.artistName
     const p = s.priceRange?.min; return p == null ? 'Price TBA' : p < 50 ? 'Under $50' : p < 80 ? '$50-$80' : '$80+'
     if (sort === 'distance') return s._dist <= 15 ? 'Near you' : s._dist <= 120 ? 'Day trip' : 'Tour hubs'
     return 'Results'
@@ -210,14 +224,23 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
               Presales opening soon
             </div>
             <div className="pb-list">
-              {presales.slice(0, 3).map(s => (
-                <div className="pb-row" key={s.id}>
-                  <div className="pb-info"><b>{s.artistName}</b><span>{s.venue?.name}</span></div>
-                  {s.publicOnsaleAt && (
-                    <span className="cd-compact">{new Date(s.publicOnsaleAt) > new Date() ? `Opens ${new Date(s.publicOnsaleAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'On sale'}</span>
-                  )}
-                </div>
-              ))}
+              {presales.slice(0, 6).map(s => {
+                const presaleName = s.presales && s.presales.length > 0 ? s.presales[0].name : null
+                const presaleTarget = s.presales && s.presales.length > 0 ? s.presales[0].startDateTime : s.publicOnsaleAt
+                return (
+                  <div className="pb-row" key={s.id}>
+                    <div className="pb-info">
+                      <b>{s.artistName}</b>
+                      <span>{presaleName ? `${presaleName} · ` : ''}{s.venue?.name}</span>
+                    </div>
+                    {presaleTarget && new Date(presaleTarget) > new Date() ? (
+                      <Countdown target={presaleTarget} />
+                    ) : (
+                      <span className="cd-compact" style={{ color: '#3ddc91' }}>On sale</span>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </section>
         )}

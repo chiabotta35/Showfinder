@@ -379,7 +379,7 @@ input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); ou
 .cc-text b { font-size:14.5px; font-weight:600; }
 .cc-text span { font-size:12.5px; color:var(--dim); }
 .conn-status { display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; color:#3ddc91; cursor:pointer; }
-.info-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+.info-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
 .info-tile { padding:18px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); display:flex; flex-direction:column; gap:6px; }
 .it-label { font-size:12.5px; color:var(--dim); font-weight:500; }
 .info-tile b { font-size:24px; font-weight:700; letter-spacing:-.5px; }
