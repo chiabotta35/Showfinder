@@ -180,7 +180,7 @@ export default function LocationBar({ savedLocation, onLocationChange, compact }
         return h.name.toLowerCase().includes(q) || h.region.toLowerCase().includes(q)
       })
     : []
-  const hubList = location ? getNearestHubs(location.latitude, location.longitude, 5) : TOURING_HUBS.slice(0, 5)
+  const hubList = hubs.length > 0 ? hubs : (location ? getNearestHubs(location.latitude, location.longitude, 10) : TOURING_HUBS.slice(0, 5))
   const visibleHubs = hubsExpanded ? TOURING_HUBS : hubList
 
   return (

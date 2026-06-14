@@ -3,10 +3,9 @@ import { getNearestHubs, haversineDistanceMiles } from '@/lib/location'
 const NOMINATIM = 'https://nominatim.openstreetmap.org'
 const HEADERS = { 'User-Agent': 'ShowFinder/1.0', 'Accept-Language': 'en-US,en' }
 
-// Hubs within this distance are "close" — auto-enabled on the shows page by default.
 const NEAR_HUB_RADIUS_MI = 350
-// Hubs within this distance appear in the toggle UI but aren't enabled by default.
 const SUGGESTED_HUB_RADIUS_MI = 600
+
 export async function GET(req: Request) {
   const {searchParams} = new URL(req.url)
   const lat = parseFloat(searchParams.get('lat')??''), lng = parseFloat(searchParams.get('lng')??'')
@@ -16,13 +15,13 @@ export async function GET(req: Request) {
     const data = await res.json(); const addr = data.address??{}
     const city = addr.city||addr.town||addr.village||addr.municipality||addr.county||'Unknown'
     const all = getNearestHubs(lat, lng, 15)
-    // Tag each hub with its distance so the client can show it.
     const annotated = all.map(h => ({ ...h, distanceMiles: Math.round(haversineDistanceMiles(lat, lng, h.latitude, h.longitude)) }))
     const nearHubs = annotated.filter(h => h.distanceMiles <= NEAR_HUB_RADIUS_MI)
     const suggestedHubs = annotated.filter(h => h.distanceMiles <= SUGGESTED_HUB_RADIUS_MI)
     return NextResponse.json({city,region:addr.state??'',country:addr.country_code?.toUpperCase()??'US',latitude:lat,longitude:lng, nearHubs, suggestedHubs})
   } catch(e){return NextResponse.json({error:'Geocoding failed'},{status:500})}
 }
+
 export async function POST(req: Request) {
   const body = await req.json().catch(()=>null)
   const query = body?.query?.trim()
