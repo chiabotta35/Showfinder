@@ -61,6 +61,7 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
           if (Date.now() - ts < ARTIST_CACHE_TTL_MS) {
             setArtists(data.artists ?? [])
             setLoading(false)
+            try { localStorage.setItem('lastShowsArtists', JSON.stringify((data.artists ?? []).map((a: ScoredArtist) => a.name))) } catch {}
             return
           }
         }
@@ -70,7 +71,10 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
     const data = await res.json()
     setArtists(data.artists ?? [])
     setLoading(false)
-    try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })) } catch {}
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }))
+      localStorage.setItem('lastShowsArtists', JSON.stringify((data.artists ?? []).map((a: ScoredArtist) => a.name)))
+    } catch {}
   }
 
   function searchArtist(name: string) {

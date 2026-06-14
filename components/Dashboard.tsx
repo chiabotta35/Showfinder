@@ -81,6 +81,7 @@ export default function Dashboard({ lastfmUser, savedLocation, lastfmConnected }
             setArtists(data.artists ?? [])
             setSavedNames(new Set((data.artists ?? []).filter((a: ScoredArtist) => a.source === 'manual').map((a: ScoredArtist) => a.name.toLowerCase())))
             setLoading(false)
+            try { localStorage.setItem('lastShowsArtists', JSON.stringify((data.artists ?? []).map((a: ScoredArtist) => a.name))) } catch {}
             return
           }
         }
@@ -91,7 +92,10 @@ export default function Dashboard({ lastfmUser, savedLocation, lastfmConnected }
     setArtists(data.artists ?? [])
     setSavedNames(new Set((data.artists ?? []).filter((a: ScoredArtist) => a.source === 'manual').map((a: ScoredArtist) => a.name.toLowerCase())))
     setLoading(false)
-    try { localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data })) } catch {}
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data }))
+      localStorage.setItem('lastShowsArtists', JSON.stringify((data.artists ?? []).map((a: ScoredArtist) => a.name)))
+    } catch {}
   }
 
   async function addArtist(name: string, mbid?: string) {
