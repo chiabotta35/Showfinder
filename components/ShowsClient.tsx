@@ -30,8 +30,10 @@ const SOURCES: Record<string, { label: string; short: string; color: string }> =
 }
 
 function Countdown({ target }: { target: string }) {
+  const [mounted, setMounted] = useState(false)
   const [, force] = useState(0)
-  useEffect(() => { const id = setInterval(() => force(x => x + 1), 1000); return () => clearInterval(id) }, [])
+  useEffect(() => { setMounted(true); const id = setInterval(() => force(x => x + 1), 1000); return () => clearInterval(id) }, [])
+  if (!mounted) return <span className="cd-compact">…</span>
   const diff = new Date(target).getTime() - Date.now()
   if (diff <= 0) return <span className="cd-compact" style={{ color: '#3ddc91' }}>On sale</span>
   const d = Math.floor(diff / 86400000)
@@ -67,10 +69,10 @@ function SourceBadge({ source }: { source: string }) {
 }
 
 function StatusDot({ source, ts }: { source: 'cache' | 'api' | 'client' | null; ts: number | null }) {
+  const [mounted, setMounted] = useState(false)
   const [, force] = useState(0)
-  useEffect(() => { const id = setInterval(() => force(x => x + 1), 30_000); return () => clearInterval(id) }, [])
+  useEffect(() => { setMounted(true); const id = setInterval(() => force(x => x + 1), 30_000); return () => clearInterval(id) }, [])
   if (!ts) return null
-  const ageMin = Math.max(0, Math.floor((Date.now() - ts) / 60_000))
   const color = source === 'api' ? '#3ddc91' : source === 'cache' ? '#f5a623' : 'var(--faint)'
   return <span className="status-dot" style={{ background: color }} title={source === 'api' ? 'Live' : source === 'cache' ? 'Cached' : 'Local cache'} />
 }

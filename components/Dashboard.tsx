@@ -51,17 +51,16 @@ function getGreeting() {
 
 export default function Dashboard({ lastfmUser, savedLocation, lastfmConnected }: Props) {
   const { settings } = useSettings()
+  const [greeting, setGreeting] = useState('')
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<string>('6month')
-  const [location, setLocation] = useState<UserLocation | null>(null)
-  const [hubs, setHubs] = useState<TouringHub[]>([])
   const [savedNames, setSavedNames] = useState<Set<string>>(new Set())
   const [hidden, setHidden] = useState<Set<string>>(new Set())
   const [showHidden, setShowHidden] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
 
-  useEffect(() => { setHidden(loadHidden()) }, [])
+  useEffect(() => { setGreeting(getGreeting()); setHidden(loadHidden()) }, [])
   useEffect(() => { loadArtists() }, [period])
 
   function invalidateArtistCache() {
@@ -134,7 +133,7 @@ export default function Dashboard({ lastfmUser, savedLocation, lastfmConnected }
       <div className="page home">
         <header className="page-head">
           <div>
-            <div className="greeting">{getGreeting()}, {lastfmUser?.displayName?.split(' ')[0] || 'there'}</div>
+            <div className="greeting">{greeting ? `${greeting}, ` : ''}{lastfmUser?.displayName?.split(' ')[0] || 'there'}</div>
             <h1 className="page-title">Dashboard</h1>
           </div>
           <div className="head-status">
