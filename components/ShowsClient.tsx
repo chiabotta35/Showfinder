@@ -237,7 +237,13 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   }
   withDist.forEach(s => { const k = groupKey(s); (groups[k] = groups[k] || []).push(s) })
 
-  const presales = shows.filter(s => s.publicOnsaleAt || (s.presales && s.presales.length > 0))
+  const presales = shows.filter(s => {
+    if (s.publicOnsaleAt && new Date(s.publicOnsaleAt) > new Date()) return true
+    if (s.presales && s.presales.length > 0) {
+      return s.presales.some(p => new Date(p.startDateTime) > new Date())
+    }
+    return false
+  })
 
   const prePageFiltered = (prePageQuery.trim()
     ? artistPool.filter(a => a.toLowerCase().includes(prePageQuery.toLowerCase()))
