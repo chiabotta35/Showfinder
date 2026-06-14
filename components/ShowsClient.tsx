@@ -82,27 +82,10 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [location, setLocation] = useState<UserLocation>(initialLocation)
   const [allHubs, setAllHubs] = useState<TouringHub[]>(initialHubs)
   const [enabledHubs, setEnabledHubs] = useState<Set<string>>(() => new Set(initialHubs.map(h => h.id)))
-  const [focusArtist] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null
-    try {
-      const focus = localStorage.getItem('lastShowsFocusArtist')
-      if (focus) { localStorage.removeItem('lastShowsFocusArtist'); return focus }
-    } catch {}
-    return null
-  })
-  const [pickedArtists, setPickedArtists] = useState<string[]>(() => {
-    if (focusArtist) return [focusArtist]
-    if (initialArtistNames.length) return initialArtistNames
-    if (typeof window === 'undefined') return []
-    try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
-    return []
-  })
-  const [artistPool] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return []
-    try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
-    return []
-  })
-  const [prePageDone, setPrePageDone] = useState(!!focusArtist || initialArtistNames.length > 0)
+  const [artistPool, setArtistPool] = useState<string[]>([])
+  const [pickedArtists, setPickedArtists] = useState<string[]>([])
+  const [prePageDone, setPrePageDone] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const [prePageQuery, setPrePageQuery] = useState('')
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
@@ -114,6 +97,33 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [cityFilter, setCityFilter] = useState<string>('all')
   const [openFilter, setOpenFilter] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const pool = (() => {
+      try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) as string[] } catch {}
+      return []
+    })()
+    setArtistPool(pool)
+
+    const focus = (() => {
+      try {
+        const f = localStorage.getItem('lastShowsFocusArtist')
+        if (f) { localStorage.removeItem('lastShowsFocusArtist'); return f }
+      } catch {}
+      return null
+    })()
+
+    if (focus) {
+      setPickedArtists([focus])
+      setPrePageDone(true)
+    } else if (initialArtistNames.length > 0) {
+      setPickedArtists(initialArtistNames)
+      setPrePageDone(true)
+    } else {
+      setPrePageDone(false)
+    }
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     if (!prePageDone || pickedArtists.length === 0) { setLoading(false); return }
@@ -237,6 +247,23 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     setPrePageDone(true)
   }
 
+  function resetToAll() {
+    setPickedArtists(artistPool)
+    setPrePageDone(true)
+  }
+
+  if (!mounted) {
+    return (
+      <Shell route="shows">
+        <div className="page shows">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton" style={{ height: 96 }} />)}
+          </div>
+        </div>
+      </Shell>
+    )
+  }
+
   if (!prePageDone) {
     return (
       <Shell route="shows">
@@ -280,7 +307,15 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     <Shell route="shows">
       <div className="page shows">
         <header className="page-head">
-          <h1 className="page-title">Shows</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <h1 className="page-title">Shows</h1>
+            {artistPool.length > 1 && (
+              <button className="pill" onClick={() => { setPrePageDone(false); setShows([]) }} style={{ fontSize: 12 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14" /></svg>
+                {pickedArtists.length === 1 ? `Search all ${artistPool.length}` : 'Change artists'}
+              </button>
+            )}
+          </div>
           <div className="head-status"><StatusDot source={dataSource} ts={lastFetchAt} />Updated</div>
         </header>
 
