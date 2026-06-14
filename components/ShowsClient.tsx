@@ -82,19 +82,28 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [location, setLocation] = useState<UserLocation>(initialLocation)
   const [allHubs, setAllHubs] = useState<TouringHub[]>(initialHubs)
   const [enabledHubs, setEnabledHubs] = useState<Set<string>>(() => new Set(initialHubs.map(h => h.id)))
-  const [artistNames] = useState<string[]>(() => {
-    if (initialArtistNames.length) return initialArtistNames
-    if (typeof window === 'undefined') return []
+  const [focusArtist] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null
     try {
       const focus = localStorage.getItem('lastShowsFocusArtist')
-      if (focus) {
-        localStorage.removeItem('lastShowsFocusArtist')
-        return [focus]
-      }
+      if (focus) { localStorage.removeItem('lastShowsFocusArtist'); return focus }
     } catch {}
+    return null
+  })
+  const [pickedArtists, setPickedArtists] = useState<string[]>(() => {
+    if (focusArtist) return [focusArtist]
+    if (initialArtistNames.length) return initialArtistNames
+    if (typeof window === 'undefined') return []
     try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
     return []
   })
+  const [artistPool] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return []
+    try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
+    return []
+  })
+  const [prePageDone, setPrePageDone] = useState(!!focusArtist || initialArtistNames.length > 0)
+  const [prePageQuery, setPrePageQuery] = useState('')
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
@@ -107,6 +116,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   useEffect(() => {
+    if (!prePageDone || pickedArtists.length === 0) { setLoading(false); return }
     if (typeof window === 'undefined') return
     let mounted = true
     let savedLoc: any = null
@@ -128,7 +138,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
       const raw = localStorage.getItem(CACHE_KEY)
       if (raw && savedLoc) {
         const { ts, data, locKey } = JSON.parse(raw)
-        const cur = `${savedLoc.latitude},${savedLoc.longitude}|${savedHubIds.slice().sort().join(',')}|${artistNames.slice().sort().join(',')}`
+        const cur = `${savedLoc.latitude},${savedLoc.longitude}|${savedHubIds.slice().sort().join(',')}|${pickedArtists.slice().sort().join(',')}`
         if (Date.now() - ts < CACHE_TTL_MS && locKey === cur) {
           setShows(data.shows ?? []); setArtists(data.artists ?? []); setLoading(false); setDataSource('client'); setLastFetchAt(ts); return
         }
@@ -153,7 +163,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
       })
       .catch(() => { if (mounted) loadShows(savedLoc, []) })
     return () => { mounted = false }
-  }, [])
+  }, [prePageDone, pickedArtists])
 
   async function loadShows(savedLocOverride?: any, savedHubIdsOverride?: string[]) {
     let hubIdsToSend: string[]
@@ -165,12 +175,12 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
     url.searchParams.set('lat', String(loc.latitude)); url.searchParams.set('lng', String(loc.longitude)); url.searchParams.set('city', loc.city)
     if (loc.region) url.searchParams.set('region', loc.region)
     if (hubIdsToSend.length) url.searchParams.set('hubs', hubIdsToSend.join(','))
-    if (artistNames.length) url.searchParams.set('artists', artistNames.join(','))
+    if (pickedArtists.length) url.searchParams.set('artists', pickedArtists.join(','))
     const res = await fetch(url.toString())
     const data = await res.json()
     setShows(data.shows ?? []); setArtists(data.artists ?? []); setLoading(false); setLastFetchAt(Date.now())
     setDataSource(data.fromCache ? 'cache' : 'api')
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${loc.latitude},${loc.longitude}|${hubIdsToSend.sort().join(',')}|${artistNames.slice().sort().join(',')}` })) } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data, locKey: `${loc.latitude},${loc.longitude}|${hubIdsToSend.sort().join(',')}|${pickedArtists.slice().sort().join(',')}` })) } catch {}
   }
 
   function refresh() { try { localStorage.removeItem(CACHE_KEY) } catch {}; loadShows() }
@@ -217,6 +227,54 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   withDist.forEach(s => { const k = groupKey(s); (groups[k] = groups[k] || []).push(s) })
 
   const presales = shows.filter(s => s.publicOnsaleAt || (s.presales && s.presales.length > 0))
+
+  const prePageFiltered = prePageQuery.trim()
+    ? artistPool.filter(a => a.toLowerCase().includes(prePageQuery.toLowerCase()))
+    : artistPool
+
+  function startShows(names: string[]) {
+    setPickedArtists(names)
+    setPrePageDone(true)
+  }
+
+  if (!prePageDone) {
+    return (
+      <Shell route="shows">
+        <div className="page shows">
+          <header className="page-head">
+            <h1 className="page-title">Shows</h1>
+          </header>
+
+          <section className="block">
+            <div className="block-head">
+              <h2 className="block-title">Find shows for</h2>
+            </div>
+            <button className="btn-primary" style={{ alignSelf: 'flex-start', marginBottom: 4 }}
+              onClick={() => startShows(artistPool)}>
+              All {artistPool.length} artists
+            </button>
+            <div className="artist-search" style={{ marginTop: 4 }}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4" /></svg>
+              <input value={prePageQuery} onChange={e => setPrePageQuery(e.target.value)} placeholder="Search artists…" />
+            </div>
+            <div className="artist-list" style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {prePageFiltered.map(a => (
+                <div key={a} className="artist-row" style={{ cursor: 'pointer' }} onClick={() => startShows([a])}>
+                  <div className="ar-info">
+                    <div className="ar-name">{a}</div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                </div>
+              ))}
+              {prePageFiltered.length === 0 && (
+                <div className="empty"><div className="empty-sub">No artists found</div></div>
+              )}
+            </div>
+          </section>
+        </div>
+      </Shell>
+    )
+  }
 
   return (
     <Shell route="shows">
