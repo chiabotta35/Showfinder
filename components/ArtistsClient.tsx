@@ -76,7 +76,7 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
   function searchArtist(name: string) {
     setSearching(name)
     try {
-      localStorage.setItem('lastShowsArtists', JSON.stringify([name]))
+      localStorage.setItem('lastShowsFocusArtist', name)
       if (savedLocation) {
         localStorage.setItem('lastShowsLocation', JSON.stringify({
           city: savedLocation.city, region: savedLocation.region, country: 'US',

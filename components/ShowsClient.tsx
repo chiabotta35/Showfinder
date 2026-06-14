@@ -85,6 +85,13 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [artistNames] = useState<string[]>(() => {
     if (initialArtistNames.length) return initialArtistNames
     if (typeof window === 'undefined') return []
+    try {
+      const focus = localStorage.getItem('lastShowsFocusArtist')
+      if (focus) {
+        localStorage.removeItem('lastShowsFocusArtist')
+        return [focus]
+      }
+    } catch {}
     try { const s = localStorage.getItem('lastShowsArtists'); if (s) return JSON.parse(s) } catch {}
     return []
   })
