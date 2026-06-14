@@ -146,15 +146,23 @@ export default function ArtistsClient({ lastfmUser, savedLocation, lastfmConnect
         ) : (
           <div className="artist-grid">
             {filtered.map(a => (
-              <button key={a.name} className="artist-grid-card" onClick={() => searchArtist(a.name)}>
-                <Avatar name={a.name} size={64} />
-                <div className="agc-name">{a.name}</div>
-                <div className="agc-plays">{a.playCount?.toLocaleString() ?? 0} plays</div>
-                {a.source === 'manual' && <span className="manual-badge" style={{ marginTop: 4 }}>MANUAL</span>}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <div key={a.name} className="artist-grid-card" style={{ cursor: 'default' }}>
+                <button onClick={() => searchArtist(a.name)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', width: '100%' }}>
+                  <Avatar name={a.name} size={64} />
+                  <div className="agc-name">{a.name}</div>
+                  <div className="agc-plays">{a.playCount?.toLocaleString() ?? 0} plays</div>
+                  {a.source === 'manual' && <span className="manual-badge" style={{ marginTop: 2 }}>MANUAL</span>}
+                </button>
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                   {searching === a.name && <span className="status-dot pulse" style={{ background: 'var(--accent)' }} />}
+                  <button onClick={(e) => { e.stopPropagation(); searchArtist(a.name) }} style={{ padding: '5px 12px', fontSize: 11, fontWeight: 600, borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-line)' }}>
+                    Search shows
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); askRemove(a.name) }} style={{ padding: '5px 12px', fontSize: 11, fontWeight: 600, borderRadius: 999, background: 'var(--surface2)', color: '#ff6f6f', border: '1px solid #ff6f6f33' }}>
+                    Remove
+                  </button>
                 </div>
-              </button>
+              </div>
             ))}
           </div>
         )}

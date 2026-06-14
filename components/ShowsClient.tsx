@@ -87,6 +87,7 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
   const [prePageDone, setPrePageDone] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [prePageQuery, setPrePageQuery] = useState('')
+  const [excludedArtists, setExcludedArtists] = useState<Set<string>>(new Set())
   const [shows, setShows] = useState<Show[]>([])
   const [artists, setArtists] = useState<ScoredArtist[]>([])
   const [loading, setLoading] = useState(true)
@@ -238,9 +239,9 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
 
   const presales = shows.filter(s => s.publicOnsaleAt || (s.presales && s.presales.length > 0))
 
-  const prePageFiltered = prePageQuery.trim()
+  const prePageFiltered = (prePageQuery.trim()
     ? artistPool.filter(a => a.toLowerCase().includes(prePageQuery.toLowerCase()))
-    : artistPool
+    : artistPool).filter(a => !excludedArtists.has(a))
 
   function startShows(names: string[]) {
     setPickedArtists(names)
@@ -249,6 +250,16 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
 
   function resetToAll() {
     setPickedArtists(artistPool)
+    setExcludedArtists(new Set())
+    setPrePageDone(true)
+  }
+
+  function removeArtistFromPool(name: string) {
+    setExcludedArtists(prev => new Set(prev).add(name))
+  }
+
+  function searchSingleArtist(name: string) {
+    setPickedArtists([name])
     setPrePageDone(true)
   }
 
@@ -277,20 +288,32 @@ export default function ShowsClient({ initialLocation, initialHubs, initialArtis
               <h2 className="block-title">Find shows for</h2>
             </div>
             <button className="btn-primary" style={{ alignSelf: 'flex-start', marginBottom: 4 }}
-              onClick={() => startShows(artistPool)}>
+              onClick={() => resetToAll()}>
               All {artistPool.length} artists
             </button>
+            {excludedArtists.size > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--dim)', marginBottom: 4 }}>
+                {excludedArtists.size} removed · <button style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: 12, padding: 0 }} onClick={() => setExcludedArtists(new Set())}>restore all</button>
+              </div>
+            )}
             <div className="artist-search" style={{ marginTop: 4 }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-4-4" /></svg>
               <input value={prePageQuery} onChange={e => setPrePageQuery(e.target.value)} placeholder="Search artists…" />
             </div>
             <div className="artist-list" style={{ maxHeight: 400, overflowY: 'auto' }}>
               {prePageFiltered.map(a => (
-                <div key={a} className="artist-row" style={{ cursor: 'pointer' }} onClick={() => startShows([a])}>
-                  <div className="ar-info">
+                <div key={a} className="artist-row">
+                  <div className="ar-info" style={{ cursor: 'pointer', flex: 1 }} onClick={() => startShows([a])}>
                     <div className="ar-name">{a}</div>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    <button onClick={() => searchSingleArtist(a)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid var(--accent-line)' }}>
+                      Search only
+                    </button>
+                    <button onClick={() => removeArtistFromPool(a)} style={{ padding: '4px 10px', fontSize: 11, fontWeight: 600, borderRadius: 999, background: 'var(--surface2)', color: 'var(--faint)', border: '1px solid var(--border)' }}>
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
               {prePageFiltered.length === 0 && (
